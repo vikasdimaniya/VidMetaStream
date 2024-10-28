@@ -1,0 +1,11 @@
+{
+  "name": "vidmetastream",
+  "version": "1.0.0",
+  "description": "An advanced video querying system designed for machine learning applications, enabling complex temporal and spatial searches within large video datasets. The system integrates state-of-the-art object detection and tracking technologies to efficiently filter and retrieve specific video segments required for AI model training.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "vikasdimaniya",
+  "license": "ISC"
+}
