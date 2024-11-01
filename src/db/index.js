@@ -1,6 +1,4 @@
-const { video } = require('./schema/video.js');
-const { Fragments } = require('./schema/fragments.js');
+const video = require('./schema/video.js');
 module.exports = {
-    video,
-    Fragments
+    video
 };

@@ -9,15 +9,13 @@ let gridFSBucket;
 async function initMongo() {
     try {
         const connection = await mongoose.connect(mongoURI); // Connect to MongoDB
-        db = connection.connection.db; // Access the native MongoDB driver’s DB instance
+        db = mongoose.connection; // Access the native MongoDB driver’s DB instance
         console.log('Connected to MongoDB');
-        let gridFSBucket;
-        db.once('open', () => {
-            gridFSBucket = new GridFSBucket(db.db, { bucketName: 'uploads' });
-        });
+        gridFSBucket = new GridFSBucket(db.db, { bucketName: 'uploads' });
+        console.log('Connected to GridFS');
     } catch (error) {
         console.error('Error connecting to MongoDB:', error);
     }
 }
 
-module.exports = { initMongo, db };
+module.exports = { initMongo, db, gridFSBucket };
