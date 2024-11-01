@@ -1,9 +1,8 @@
-import Fastify from 'fastify';
-import multipart from '@fastify/multipart';
+const Fastify = require('fastify');
+const multipart = require('@fastify/multipart');
+const videoRoutes = require('./src/api/video.js'); // Import video routes
 
-let gridFSBucket;
-
-const app = Fastify({
+let app = Fastify({
     logger: true
 });
 
@@ -17,4 +16,6 @@ app.get('/ping', async function (req, reply) {
     return reply.send({ ping: 'pong' });
 });
 
-export { app, gridFSBucket };
+app.register(videoRoutes);
+
+module.exports = app;

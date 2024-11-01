@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose  = require('mongoose');
 
 const videoSchema = new mongoose.Schema({
     title: String,
@@ -9,9 +9,9 @@ const videoSchema = new mongoose.Schema({
     error: Object,
     status: {
         type: String,
-        enum: ['uploaded', 'analized', 'fragmenting', 'fragmented', 'ready', 'error'],
-        default: 'uploaded'
+        enum: ['created', 'uploaded', 'analized', 'fragmenting', 'fragmented', 'ready', 'error'],
+        default: 'created'
     }
 });
-
-export const Video = mongoose.model('video', videoSchema);
+const Video = mongoose.model('video', videoSchema)
+module.exports = {Video};

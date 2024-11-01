@@ -4,13 +4,17 @@
   "description": "An advanced video querying system designed for machine learning applications, enabling complex temporal and spatial searches within large video datasets. The system integrates state-of-the-art object detection and tracking technologies to efficiently filter and retrieve specific video segments required for AI model training.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
   "author": "vikasdimaniya",
   "license": "ISC",
   "dependencies": {
     "@fastify/multipart": "^9.0.1",
     "fastify": "^5.0.0",
-    "fluent-ffmpeg": "^2.1.3"
+    "fluent-ffmpeg": "^2.1.3",
+    "mime": "^2.6.0",
+    "mongoose": "^8.8.0",
+    "mongoose-gridfs": "^1.3.0"
   }
 }
