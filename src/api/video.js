@@ -5,26 +5,26 @@ const db = require('../db');
 
 const pump = promisify(pipeline);
 
-async function videoRoutes(app) {
+module.exports = {
     /**
      * Get a list of all videos
      * This will return a list of all videos in the database
      * The videos will be returned as an array of objects
      */
-    app.get('/video/:video_id', async function (req, reply) {
+    getVideo: async (req, reply) => {
         if (!req.params.video_id) {
             reply.code(400).send({ message: 'No video id provided' });
             return;
         }
 
-        return db.video.find(req.params.video_id);
-    });
+        return db.video.findById(req.params.video_id);
+    },
 
     /**
      * Create a new video, this will create a new video in the database with the title and description
      * After this you have to call post /upload/:video_id to upload the video file
      */
-    app.post('/video', async function (req, reply) {
+    createVideo: async (req, reply) => {
         let video = new db.video({
             title: req.body.title,
             description: req.body.description,
@@ -32,14 +32,14 @@ async function videoRoutes(app) {
         });
         await video.save();
         return video;
-    });
+    },
 
     /**
      * Upload a video file
      * This will upload a video file to the server and save the location in the database
      * The video will be processed by the fragmenter cron job and stored in the gridfs
      */
-    app.post('/upload/:video_id', async function (req, reply) {
+    uploadVideo: async (req, reply) => {
         const parts = req.files();
         if (!parts) {
             reply.code(400).send({ message: 'No file uploaded' });
@@ -73,7 +73,5 @@ async function videoRoutes(app) {
             return;
         }
         return { message: 'files uploaded' };
-    });
+    },
 }
-
-module.exports = videoRoutes;

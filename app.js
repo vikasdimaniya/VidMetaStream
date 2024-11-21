@@ -1,6 +1,6 @@
 const Fastify = require('fastify');
 const multipart = require('@fastify/multipart');
-const videoRoutes = require('./src/api/video.js'); // Import video routes
+const videoRoutes = require('./src/routes/video.js'); // Import video routes
 
 let app = Fastify({
     logger: true
