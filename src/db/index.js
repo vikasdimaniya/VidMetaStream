@@ -1,4 +1,4 @@
-const video = require('./schema/video.js');
+const video = require('../model/video.js');
 module.exports = {
     video
 };
