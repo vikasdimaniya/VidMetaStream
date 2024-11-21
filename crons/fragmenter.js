@@ -1,3 +1,4 @@
+'use strict';
 // read a video file = require(disk and fragment it into smaller files then store these into the gridfs
 // 5 second videos each will be stored use ffmpeg to fragment the video
 
@@ -13,10 +14,22 @@ function sleep(ms) {
 }
 
 async function start() {
+    await core.initMongo();
     while (true) {
-        let video = await db.video.updateOne({ status: 'analized' }, { status: 'fragmenting' }, { new: true });
+        let video = await db.video.findOneAndUpdate({ status: 'analized' }, { status: 'fragmenting' }, { new: true });
         if (!video) {
+            console.log("No videos to fragment");
             await sleep(2000);
+            continue;
+        }
+        console.log('Fragmenting video:', video._id);
+        console.log(video);
+        if (!video.uploadTempLocation) {
+            console.log('Video has no upload location');
+            // Update video status to 'failed'
+            video.status = 'error';
+            video.error = {code: 'no_upload_location', message: 'Video had no upload location, while fragmenting.'};
+            await video.save();
             continue;
         }
         const inputFilePath = video.uploadTempLocation; // Path to the input video file

@@ -7,11 +7,21 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
+            "name": "API Server",
             "skipFiles": [
                 "<node_internals>/**"
             ],
             //"program": "${workspaceFolder}/core.js",
+            "program": "${workspaceFolder}/server.js",
+            "console": "integratedTerminal",
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Fragmenter Cron",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
             "program": "${workspaceFolder}/crons/fragmenter.js",
             "console": "integratedTerminal",
         }

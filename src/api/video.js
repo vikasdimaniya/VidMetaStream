@@ -58,13 +58,17 @@ module.exports = {
             reply.code(404).send({ message: 'Video not found' });
             return;
         }
-
+        if (!fs.existsSync('./temp')) {
+            fs.mkdirSync('./temp');
+        }
+        let filename;
         for await (const part of parts) {
             // upload and save the file
+            filename = part.filename;
             await pump(part.file, fs.createWriteStream(`./temp/${part.filename}`));
         }
 
-        video.uploadTempLocation = `./temp/${parts[0].filename}`;
+        video.uploadTempLocation = filename;
         video.status = 'uploaded';
         let saved = await video.save();
         if (saved.errors || saved.error) {

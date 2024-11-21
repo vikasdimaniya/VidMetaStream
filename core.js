@@ -8,7 +8,9 @@ let db;
 let gridFSBucket;
 async function initMongo() {
     try {
-        const connection = await mongoose.connect(mongoURI); // Connect to MongoDB
+        const connection = await mongoose.connect(mongoURI,{
+            dbName: dbName
+        }); // Connect to MongoDB
         db = mongoose.connection; // Access the native MongoDB driver’s DB instance
         console.log('Connected to MongoDB');
         gridFSBucket = new GridFSBucket(db.db, { bucketName: 'uploads' });
