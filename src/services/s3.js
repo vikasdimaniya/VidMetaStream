@@ -138,5 +138,5 @@ module.exports = {
     uploadVideo,
     uploadVideoStream,
     uploadLargeVideoFile,
-    downloadVideo,
+    downloadVideo
 };

@@ -10,6 +10,7 @@ const db = require('../src/db');
 const ffmpegUtils = require('../src/utils/ffmpeg.js');
 const chunkStorage = require('../src/services/chunkStorage');
 const fs = require('fs');
+const S3Service = require('../src/services/s3.js');
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -27,15 +28,13 @@ async function start() {
         }
         console.log('Fragmenting video:', video._id);
         console.log(video);
-        if (!video.uploadTempLocation) {
-            console.log('Video has no upload location');
-            // Update video status to 'failed'
-            video.status = 'error';
-            video.error = {code: 'no_upload_location', message: 'Video had no upload location, while fragmenting.'};
-            await video.save();
-            continue;
+        //download the video from s3 and save it in the temp folder
+        let downloadPath = "temp/downloads/" + video._id;
+        if (!fs.existsSync("temp/downloads/")) {
+            fs.mkdirSync("temp/downloads/", { recursive: true });
         }
-        const inputFilePath = video.uploadTempLocation; // Path to the input video file
+        let downloaded = await S3Service.downloadVideo(process.env.AWS_BUCKET_NAME, video._id.toString(), downloadPath);
+        const inputFilePath = downloadPath; // Path to the input video file
         const outputDir = 'temp/fragmented/' + video._id + "/"; // Path to output directory for chunks
 
         // Split video into 5-second chunks
