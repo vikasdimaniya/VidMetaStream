@@ -1,0 +1,101 @@
+{
+	"info": {
+		"_postman_id": "5a2ccee1-7121-482b-8190-b3c7238209f6",
+		"name": "vidstream",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "11631786",
+		"_collection_link": "https://takrino.postman.co/workspace/Team-Workspace~0aeb4ef0-b7b0-4b3b-80ed-685c07e31555/collection/11631786-5a2ccee1-7121-482b-8190-b3c7238209f6?action=share&source=collection_link&creator=11631786"
+	},
+	"item": [
+		{
+			"name": "get video",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "movie",
+							"type": "file",
+							"src": "/Users/vikaskumar/Downloads/movie.mkv"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8000/video/673f8d4ca7429d36c77eb8b0",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"video",
+						"673f8d4ca7429d36c77eb8b0"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create video",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"1\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"1.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/video",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"video"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "upload",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "movie",
+							"type": "file",
+							"src": "/Users/vikaskumar/Downloads/movie.mkv"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8000/upload",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"upload"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
