@@ -230,7 +230,7 @@ db_name = "video_metadata_db"
 uri = f"mongodb+srv://{mongo_user_name}:{mongo_password}@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
 client = MongoClient(uri)
 db = client[db_name]
-collection = db["videos"]
+collection = db["objects"]
 
 s3_client = boto3.client(
     "s3",
