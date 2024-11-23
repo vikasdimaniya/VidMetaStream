@@ -1,8 +1,12 @@
 const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
+const fs = require('fs');
 
 // Function to split video into 5-second chunks
 async function splitVideoIntoChunks(inputFilePath, outputDir) {
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
     const segmentDuration = 5; // Duration of each segment in seconds
     return new Promise((resolve, reject) => {
         ffmpeg(inputFilePath)

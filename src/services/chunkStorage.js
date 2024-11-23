@@ -1,13 +1,30 @@
-const core = require('./core.js');
+const fs = require('fs');
+const path = require('path');
 // Upload function with metadata storage
-async function uploadFile(fileStream, metadata) {
-    const uploadStream = core.gridFSBucket.openUploadStream(metadata.filename);
-    fileStream.pipe(uploadStream);
-    uploadStream.on('finish', async () => {
-        const newFile = new FileMetadata(metadata);
-        await newFile.save();
-        console.log('File and metadata saved successfully');
-    });
-}
 
-module.exports = { uploadFile };
+module.exports = {
+    uploadFile: function(gridFSBucket, filePath) {
+        return new Promise((resolve, reject) => {
+            fs.createReadStream(filePath).
+            pipe(gridFSBucket.openUploadStream(filePath))
+            .on('finish',function(data) {
+                return resolve(data);
+            }).on('error', function(err) {
+                console.log('An error occurred while upload!', err);
+                console.log(err);
+                return reject({error: err});
+            });
+        });
+    },
+
+    uploadAllFilesToGridfs: async function (gridFSBucket, dir) {
+        let promisList = [];
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+            let promise = this.uploadFile(gridFSBucket, path.join(dir, file));
+            promisList.push(promise);
+        }
+        let x = await Promise.all(promisList);
+        return x;
+    }
+};

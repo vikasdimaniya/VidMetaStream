@@ -65,10 +65,10 @@ module.exports = {
         for await (const part of parts) {
             // upload and save the file
             filename = part.filename;
-            await pump(part.file, fs.createWriteStream(`./temp/${part.filename}`));
+            await pump(part.file, fs.createWriteStream(`./temp/uploads/${part.filename}`));
         }
 
-        video.uploadTempLocation = filename;
+        video.uploadTempLocation = './temp/uploads/'+filename;
         video.status = 'uploaded';
         let saved = await video.save();
         if (saved.errors || saved.error) {
