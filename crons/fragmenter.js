@@ -9,6 +9,7 @@ const core = require('./../core.js');
 const db = require('../src/db');
 const ffmpegUtils = require('../src/utils/ffmpeg.js');
 const chunkStorage = require('../src/services/chunkStorage');
+const fs = require('fs');
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -48,14 +49,12 @@ async function start() {
         //await storeInGridFS(outputDir);
         let x = await chunkStorage.uploadAllFilesToGridfs(gridFSBucket, outputDir);
         console.log(x);
-        // try {
-        //     //delete the outputDir
-        //     fs.rmdirSync(outputDir, { recursive: true });
-        //     //delete the inputFilePath
-        //     fs.unlinkSync(inputFilePath);
-        // } catch (error) {
-        //     console.error('Error deleting files:', error);
-        // }
+        try {
+            fs.rmdirSync(outputDir, { recursive: true });
+            fs.unlinkSync(inputFilePath);
+        } catch (error) {
+            console.error('Error deleting files:', error);
+        }
         video.status = 'ready';
         await video.save();
     }
