@@ -134,9 +134,6 @@ dist
 temp
 temp/*
 
-<<<<<<< Updated upstream
 test_videos
 test_videos/*
-=======
 fragmented/
->>>>>>> Stashed changes
