@@ -19,7 +19,7 @@ async function start() {
     await core.initMongo(); // Initialize MongoDB and GridFS
     gridFSBucket = core.getGridFSBucket();
     while (true) {
-        let video = await db.video.findOneAndUpdate({ status: 'analized' }, { status: 'fragmenting' }, { new: true });
+        let video = await db.video.findOneAndUpdate({ status: 'analyzed' }, { status: 'fragmenting' }, { new: true });
         if (!video) {
             console.log("No videos to fragment");
             await sleep(2000);

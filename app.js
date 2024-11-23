@@ -1,7 +1,7 @@
 const Fastify = require('fastify');
 const multipart = require('@fastify/multipart');
 const videoRoutes = require('./src/routes/video.js'); // Import video routes
-
+const core = require("./core.js") //initializes parameters
 let app = Fastify({
     logger: true
 });

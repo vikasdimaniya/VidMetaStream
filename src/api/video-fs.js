@@ -2,7 +2,7 @@ const fs = require('fs');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const db = require('../db');
-const s3Service = require("../services/s3.js");
+
 const pump = promisify(pipeline);
 
 module.exports = {
@@ -30,11 +30,7 @@ module.exports = {
             description: req.body.description,
             filename: req.body.filename
         });
-        
         await video.save();
-
-        let url = await s3Service.getUploadSignedUrl(process.env.AWS_BUCKET_NAME, video._id.toString());
-        video.uploadUrl = url;
         return video;
     },
 

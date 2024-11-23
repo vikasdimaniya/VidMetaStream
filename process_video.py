@@ -16,7 +16,7 @@
 # AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 # AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 # BUCKET_NAME = "adtbucket"  # Replace with your bucket name
-# db_name = "video_metadata_db"  # Database name
+# db_name = "vidmetastream"  # Database name
 # collection_name = "videos"  # Collection name
 
 # uri = f"mongodb+srv://{mongo_user_name}:{mongo_password}@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
@@ -225,7 +225,7 @@ mongo_password = os.getenv("MONGO_PASSWORD")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 BUCKET_NAME = "adtbucket"
-db_name = "video_metadata_db"
+db_name = "vidmetastream"
 
 uri = f"mongodb+srv://{mongo_user_name}:{mongo_password}@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
 client = MongoClient(uri)

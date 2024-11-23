@@ -12,7 +12,7 @@ load_dotenv()
 mongo_user_name = os.getenv("MONGO_USERNAME")
 mongo_password = os.getenv("MONGO_PASSWORD")
 BUCKET_NAME = "adtbucket"
-db_name = "video_metadata_db"
+db_name = "vidmetastream"
 
 uri = f"mongodb+srv://{mongo_user_name}:{mongo_password}@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
 client = MongoClient(uri)

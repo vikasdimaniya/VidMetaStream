@@ -1,5 +1,14 @@
+require('dotenv').config();
+console.log("AWS_REGION:", process.env.AWS_REGION);
 const mongoose = require('mongoose');
-const { GridFSBucket } = require('mongodb');
+const { S3Client } = require('@aws-sdk/client-s3');
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
+});
 
 const mongoURI = 'mongodb://localhost:27017';
 const dbName = 'vidmetastream';
@@ -9,7 +18,7 @@ let gridFSBucket;
 
 async function initMongo() {
     try {
-        const connection = await mongoose.connect(mongoURI, {
+        const connection = await mongoose.connect(process.env.MONGODB_URI, {
             dbName: dbName,
             useNewUrlParser: true,
             useUnifiedTopology: true,
@@ -30,4 +39,5 @@ module.exports = {
     initMongo,
     getDb: () => db,
     getGridFSBucket: () => gridFSBucket,
+    s3Client
 };
