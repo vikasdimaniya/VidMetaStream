@@ -141,4 +141,4 @@ fragmented/
 
 downloads
 downloads/
-downloads/*
+downloads/*.DS_Store
