@@ -1,15 +1,16 @@
+'use strict';
 module.exports = {
     getTimings: function (object) {
         return {
-            startTime: object.startTime,
-            endTime: object.endTime
+            startTime: object.start_time,
+            endTime: object.end_time
         }
 
     },
     calculateOverlapingTimings: function (mainWindow, secondaryWindow) {
         return {
-            startTime: max(mainWindow.startTime, secondaryWindow.startTime),
-            endTime: min(mainWindow.endTime, secondaryWindow.endTime)
+            startTime: Math.max(mainWindow.startTime, secondaryWindow.startTime),
+            endTime: Math.min(mainWindow.endTime, secondaryWindow.endTime)
         };
     }
 }

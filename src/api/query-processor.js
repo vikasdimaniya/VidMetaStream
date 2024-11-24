@@ -9,7 +9,12 @@ module.exports = {
      * [{video_id:2, start_time: 0, end_time: 10}, {video_id:2, start_time: 15, end_time: 20}, {video_id:3, start_time: 0, end_time: 10}]
      */
     queryVideos: async (req, reply) => {
-        let objects = req.params.objects;
+        let objects = req.query.objects;
+        try{
+            objects = JSON.parse(objects);
+        }catch(err){
+            return reply.send({error: "Invalid JSON"});
+        }
         let results = await queryProcessorUtils.queryObjects(objects);
         return reply.send(results);
     },

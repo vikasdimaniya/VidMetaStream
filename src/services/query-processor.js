@@ -1,18 +1,14 @@
 const db = require('../db');
 
 module.exports = {
-    queryVideosWithInSpecificTime: async (videoIds, objects, startTime, endTime) => {
+    queryVideosWithInSpecificTime: async (videoId, object, startTime, endTime) => {
         let window = {
             startTime: startTime,
             endTime: endTime
         }
         let query = {}
-        if (!videoIds) {
-            // search in all videos, this should never happen
-        } else {
-            query.video_id = { $in: videoIds };
-        }
-        query.object_name = { $in: objects };
+        query.video_id = videoId;
+        query.object_name = object;
         query["$or"] = [
             { 
                 "$and": [

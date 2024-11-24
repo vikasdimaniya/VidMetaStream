@@ -35,6 +35,13 @@ s3_client = boto3.client(
 model = YOLO('yolo11n.pt')
 print(model.names)
 
+def timestamp_to_seconds(timestamp):
+    # Split the timestamp into hours, minutes, seconds, and milliseconds
+    hours, minutes, seconds = map(float, timestamp.split(':'))
+    # Convert everything into seconds
+    total_seconds = hours * 3600 + minutes * 60 + seconds
+    return total_seconds
+
 class CustomFormatter(logging.Formatter):
     def formatTime(self, record, datefmt=None):
         # Format time with milliseconds
@@ -143,7 +150,7 @@ def process_video(video_path):
                         matched_instance["last_frame"] = frame_number
                         matched_instance["last_timestamp_ms"] = timestamp_ms
                         matched_instance["last_box"] = box_coordinates
-                        matched_instance["end_time"] = timestamp  # Update end_time
+                        matched_instance["end_time"] = timestamp_to_seconds(timestamp)  # Update end_time
 
                         # Add frame data to MongoDB
                         objects_collection.update_one(
@@ -155,7 +162,7 @@ def process_video(video_path):
                                 "relative_position": relative_position,
                                 "confidence": confidence
                             }},
-                            "$set": {"end_time": timestamp}  # Update end_time
+                            "$set": {"end_time": timestamp_to_seconds(timestamp)}  # Update end_time
                             }
                         )
                     else:
@@ -164,8 +171,8 @@ def process_video(video_path):
                         new_instance = {
                             "instance_id": instance_id,
                             "last_frame": frame_number,
-                            "start_time": timestamp,  # Set start_time
-                            "end_time": timestamp,    # Initialize end_time
+                            "start_time": timestamp_to_seconds(timestamp),  # Set start_time
+                            "end_time": timestamp_to_seconds(timestamp),    # Initialize end_time
                             "last_timestamp_ms": timestamp_ms,
                             "last_box": box_coordinates
                         }
@@ -176,8 +183,8 @@ def process_video(video_path):
                             "_id": instance_id,
                             "video_id": video_name,
                             "object_name": label,
-                            "start_time": timestamp, 
-                            "end_time": timestamp,    # Initialize end_time # Set start_time
+                            "start_time": timestamp_to_seconds(timestamp), 
+                            "end_time": timestamp_to_seconds(timestamp),    # Initialize end_time # Set start_time
                             "frames": [{
                                 "frame": frame_number,
                                 "timestamp": timestamp,  # Now includes milliseconds
