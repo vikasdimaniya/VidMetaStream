@@ -2,7 +2,7 @@ const queryService = require('../services/query-processor.js');
 const timeWindowsUtils = require('../utils/time-windows.js');
 module.exports = {
     queryObjects: async (objects) => {
-        let results = [];
+        let results = {};
         let firstObjectResult = await queryService.queryVideos(objects[0]);
         for (let result of firstObjectResult) {
             let firstParentWindow = timeWindowsUtils.getTimings(result);
@@ -16,16 +16,28 @@ module.exports = {
                     // }
                     for (let mini of overlappingWindows) {
                         let currentWindow = timeWindowsUtils.getTimings(mini);
-                        let newWindow = timeWindowsUtils.calculateOverlapingTimings(currentWindow, firstParentWindow);
+                        let newWindow = timeWindowsUtils.calculateOverlapingTimings(currentWindow, window);
                         currentObjectResults.push(newWindow);
                     }
                 }
                 parentWindows = currentObjectResults;
             }
             if (parentWindows.length > 0){
-                results.push({video_id: result.video_id, windows: parentWindows});
+                if (results.hasOwnProperty(result.video_id)) {
+                    results[result.video_id].windows = [...results[result.video_id].windows, ...parentWindows];
+                } else {
+                    results[result.video_id] = {windows: parentWindows};
+                }
             }
         }
-        return results;
+        results = timeWindowsUtils.mergeTimeWindows(results);
+        let formatedResults;
+        for (let id of Object.keys(results)) {
+            formatedResults = {
+                video_id: id,
+                windows: results[id].windows
+            }
+        }
+        return formatedResults;
     }
 }
