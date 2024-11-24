@@ -61,8 +61,8 @@ module.exports = {
             reply.code(404).send({ message: 'Video not found' });
             return;
         }
-        if (!fs.existsSync('./temp')) {
-            fs.mkdirSync('./temp');
+        if (!fs.existsSync('./temp/uploads')) {
+            fs.mkdirSync('./temp/uploads');
         }
         let filename;
         for await (const part of parts) {

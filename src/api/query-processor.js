@@ -14,6 +14,6 @@ module.exports = {
         return reply.send(results);
     },
     downloadVideoChunks: async (req, reply) => {
-
+        let sections = req.body.sections;
     }
 }
