@@ -1,3 +1,9 @@
+##TODO 
+#get annotatewd video straight from process_video
+#filter by confidence ex avg >50
+#query engine 
+
+
 import uuid  # For generating unique instance IDs
 import os
 import hashlib
