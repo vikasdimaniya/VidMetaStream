@@ -19,7 +19,7 @@ def process_video_real_time(video_path):
             break
 
         # Run YOLO detection on the frame
-        results = model.predict(frame, device=0)  # Use GPU (device=0) or set to 'cpu'
+        results = model.predict(frame, device="cpu")  # Use GPU (device=0) or set to 'cpu'
 
         # Draw detections on the frame
         annotated_frame = frame.copy()
@@ -57,5 +57,5 @@ def process_video_real_time(video_path):
 
 if __name__ == "__main__":
     # Use the provided test video path
-    video_path = "test_videos\\9354031-hd_1920_1080_30fps.mp4"
+    video_path = "/Users/brendangignac/adtproj/VidMetaStream/downloads/9354031-hd_1920_1080_30fps.mp4"
     process_video_real_time(video_path)

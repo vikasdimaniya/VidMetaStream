@@ -1,220 +1,14 @@
-# import os
-# from ultralytics import YOLO
-# import cv2
-# import datetime
-# from pymongo.mongo_client import MongoClient
-# from dotenv import load_dotenv
-# import hashlib
-# import boto3
-
-# # Load environment variables
-# load_dotenv()
-
-# # MongoDB and S3 Configuration
-# mongo_user_name = os.getenv("MONGO_USERNAME")
-# mongo_password = os.getenv("MONGO_PASSWORD")
-# AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
-# AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-# BUCKET_NAME = "adtbucket"  # Replace with your bucket name
-# db_name = "vidmetastream"  # Database name
-# collection_name = "videos"  # Collection name
-
-# uri = f"mongodb+srv://{mongo_user_name}:{mongo_password}@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
-
-# client = MongoClient(uri)
-# db = client[db_name]
-# collection = db[collection_name]
-
-# # Initialize S3 client
-# s3_client = boto3.client(
-#     "s3",
-#     aws_access_key_id=AWS_ACCESS_KEY,
-#     aws_secret_access_key=AWS_SECRET_KEY,
-# )
-
-# model = YOLO('yolo11n.pt')  # Load YOLO model
-
-# def main_menu():
-#     print("Welcome to the Video Processing and Query System!")
-#     while True:
-#         print("\nChoose an option:")
-#         print("1. Upload a video")
-#         print("2. Run a query")
-#         print("3. Exit")
-        
-#         choice = input("Enter your choice: ").strip()
-#         if choice == "1":
-#             video_path = input("Enter the absolute path to the video file: ").strip()
-#             if not os.path.isfile(video_path):
-#                 print(f"Error: The file '{video_path}' does not exist.")
-#                 continue
-#             process_video_cli(video_path)
-#         elif choice == "2":
-#             query_menu()
-#         elif choice == "3":
-#             print("Exiting. Goodbye!")
-#             break
-#         else:
-#             print("Invalid choice. Please try again.")
-
-# def process_video_cli(video_path):
-#     print(f"Processing video: {video_path}")
-    
-#     # Compute file hash to check for duplicates
-#     file_hash = compute_file_hash(video_path)
-#     if is_duplicate_video(file_hash):
-#         print("Duplicate video detected. Skipping upload.")
-#         return
-
-#     # Upload video to S3
-#     print("Uploading video to S3...")
-#     s3_url = upload_to_s3(video_path)
-#     if not s3_url:
-#         print("Error uploading video to S3. Aborting.")
-#         return
-
-#     # Process video and extract metadata
-#     metadata = process_video(video_path)
-
-#     # Save metadata in MongoDB
-#     save_video_metadata(video_path, file_hash, metadata, s3_url)
-#     print("Video processed and metadata saved.")
-
-# def process_video(video_path):
-#     cap = cv2.VideoCapture(video_path)
-#     frame_number = 0
-#     metadata = []
-
-#     # Get frame dimensions
-#     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-#     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-#     while cap.isOpened():
-#         ret, frame = cap.read()
-#         if not ret:
-#             break
-
-#         # Run YOLO on the frame
-#         results = model.predict(frame, device=0)
-
-#         # Extract metadata
-#         timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-#         timestamp = convert_ms_to_timestamp(timestamp_ms)
-#         frame_metadata = {"frame": frame_number, "timestamp": timestamp, "objects": []}
-
-#         for result in results:
-#             for box in result.boxes:
-#                 box_coordinates = box.xyxy[0].tolist()
-#                 label = model.names[int(box.cls[0])]
-#                 confidence = float(box.conf[0])
-#                 relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
-#                 frame_metadata["objects"].append({
-#                     "name": label,
-#                     "box": box_coordinates,
-#                     "relative_position": relative_position,
-#                     "confidence": confidence
-#                 })
-
-#         metadata.append(frame_metadata)
-#         frame_number += 1
-
-#     cap.release()
-#     return metadata
-
-# def query_menu():
-#     print("\nQuery Options:")
-#     print("1. Find objects in a specific region and time range")
-#     print("2. Detect interactions between objects")
-#     print("3. Find objects in a region for a duration")
-#     print("4. Go back")
-    
-#     choice = input("Enter your choice: ").strip()
-#     if choice == "1":
-#         region_query()
-#     elif choice == "2":
-#         interaction_query()
-#     elif choice == "3":
-#         duration_query()
-#     elif choice == "4":
-#         return
-#     else:
-#         print("Invalid choice. Please try again.")
-
-# def region_query():
-#     region = input("Enter region (e.g., 'top-left', 'bottom-right'): ").strip().lower()
-#     start_time = input("Enter start time (HH:MM:SS): ").strip()
-#     end_time = input("Enter end time (HH:MM:SS): ").strip()
-#     object_name = input("Enter object name to search for: ").strip()
-    
-#     # Implement region query logic here
-#     print(f"Querying for {object_name} in {region} from {start_time} to {end_time}...")
-
-# def interaction_query():
-#     object1 = input("Enter first object: ").strip()
-#     object2 = input("Enter second object: ").strip()
-#     threshold = float(input("Enter proximity threshold (in pixels): ").strip())
-    
-#     # Implement interaction query logic here
-#     print(f"Querying for interactions between {object1} and {object2} within {threshold} pixels...")
-
-# def duration_query():
-#     region = input("Enter region (e.g., 'top-left', 'bottom-right'): ").strip().lower()
-#     object_name = input("Enter object name to search for: ").strip()
-#     duration = int(input("Enter duration in seconds: ").strip())
-    
-#     # Implement duration query logic here
-#     print(f"Querying for {object_name} in {region} for at least {duration} seconds...")
-
-# def compute_file_hash(file_path):
-#     hash_sha256 = hashlib.sha256()
-#     with open(file_path, "rb") as f:
-#         for chunk in iter(lambda: f.read(4096), b""):
-#             hash_sha256.update(chunk)
-#     return hash_sha256.hexdigest()
-
-# def is_duplicate_video(file_hash):
-#     return collection.find_one({"file_hash": file_hash}) is not None
-
-# def upload_to_s3(file_path):
-#     file_name = os.path.basename(file_path)
-#     try:
-#         s3_client.upload_file(file_path, BUCKET_NAME, file_name)
-#         return f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_name}"
-#     except Exception as e:
-#         print(f"Error uploading to S3: {e}")
-#         return None
-
-# def save_video_metadata(file_name, file_hash, metadata, s3_url):
-#     video_document = {
-#         "file_name": file_name,
-#         "file_hash": file_hash,
-#         "upload_date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-#         "s3_url": s3_url,
-#         "metadata": metadata
-#     }
-#     collection.insert_one(video_document)
-
-# def calculate_relative_position(box, frame_width, frame_height):
-#     x_center = (box[0] + box[2]) / 2 / frame_width
-#     y_center = (box[1] + box[3]) / 2 / frame_height
-#     return [x_center, y_center]
-
-# def convert_ms_to_timestamp(milliseconds):
-#     seconds = int(milliseconds / 1000)
-#     return f"{seconds // 3600:02}:{(seconds % 3600) // 60:02}:{seconds % 60:02}"
-
-# if __name__ == "__main__":
-#     main_menu()
-
-
+import uuid  # For generating unique instance IDs
 import os
 import hashlib
 import cv2
+from tqdm import tqdm  # Import tqdm for the progress bar
 from ultralytics import YOLO
 from dotenv import load_dotenv
 import boto3
+import logging
 from pymongo.mongo_client import MongoClient
-import datetime
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -239,100 +33,212 @@ s3_client = boto3.client(
 )
 
 model = YOLO('yolo11n.pt')
+print(model.names)
 
-def process_video_cli(video_path):
-    if not os.path.exists(video_path):
-        print(f"Error: The file '{video_path}' does not exist.")
-        return
-    
-    file_hash = compute_file_hash(video_path)
-    if is_duplicate_video(file_hash):
-        print("Duplicate video detected. Skipping upload.")
-        return
+class CustomFormatter(logging.Formatter):
+    def formatTime(self, record, datefmt=None):
+        # Format time with milliseconds
+        ct = self.converter(record.created)
+        if datefmt:
+            s = datetime.fromtimestamp(record.created).strftime(datefmt)
+            return s
+        else:
+            # Default format with milliseconds
+            return datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
 
-    print("Uploading video to S3...")
-    s3_url = upload_to_s3(video_path)
-    if not s3_url:
-        print("Error uploading video to S3. Aborting.")
-        return
+# Remove all existing handlers to prevent logging to the console
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
 
-    print(f"Processing video: {video_path}")
-    metadata = process_video(video_path)
-    save_video_metadata(video_path, file_hash, metadata, s3_url)
-    print("Video processed and metadata saved.")
+# Create a FileHandler to write logs to a file
+file_handler = logging.FileHandler('video_processing.log')
+file_handler.setLevel(logging.INFO)
+
+# Create and set the custom formatter with valid logging format placeholders
+formatter = CustomFormatter(fmt='%(asctime)s - %(levelname)s - %(message)s')  # Ensures milliseconds are included
+file_handler.setFormatter(formatter)
+
+# Add the FileHandler to the root logger
+logging.getLogger().addHandler(file_handler)
 
 def process_video(video_path):
     cap = cv2.VideoCapture(video_path)
     frame_number = 0
-    metadata = []
 
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    # Get frame dimensions
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+    # MongoDB collections
+    objects_collection = collection  # New collection for object presence
 
-        results = model.predict(frame, device=0, verbose=False)
+    # Temporary in-memory tracker for active objects
+    # Format: {object_name: [{"instance_id": str, "last_frame": int, "last_timestamp_ms": float, "last_box": list}, ...]}
+    active_objects = {}
 
-        timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-        timestamp = convert_ms_to_timestamp(timestamp_ms)
-        frame_metadata = {"frame": frame_number, "timestamp": timestamp, "objects": []}
+    # Timeout threshold in milliseconds (e.g., 2 seconds)
+    timeout_threshold = 2000  
 
-        for result in results:
-            for box in result.boxes:
-                box_coordinates = box.xyxy[0].tolist()
-                label = model.names[int(box.cls[0])]
-                confidence = float(box.conf[0])
-                relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
-                frame_metadata["objects"].append({
-                    "name": label,
-                    "box": box_coordinates,
-                    "relative_position": relative_position,
-                    "confidence": confidence
-                })
+    # IoU threshold for associating detections with existing tracked objects
+    iou_threshold = 0.3
 
-        metadata.append(frame_metadata)
-        frame_number += 1
+    # Extract video name (or S3 URL if available)
+    video_name = os.path.basename(video_path)  # Replace with S3 link if needed
+
+    with tqdm(total=total_frames, desc=f"Processing {video_name}", unit="frame") as pbar:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            # Run object detection
+            results = model.predict(frame, device="cpu", verbose=False)
+            
+            # Extract frame timestamp
+            timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
+            timestamp = convert_ms_to_timestamp(timestamp_ms)  # Now includes milliseconds
+
+            for result in results:
+                for box in result.boxes:
+                    # Extract object data
+                    box_coordinates = box.xyxy[0].tolist()
+                    label = model.names[int(box.cls[0])]
+                    confidence = float(box.conf[0])
+                    relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
+
+                    logging.info(
+                        f"Frame {frame_number}: Detected {label} with confidence {confidence:.2f}, "
+                        f"Box: {box_coordinates}, Relative Position: {relative_position}"
+                    )
+
+                    # Initialize the list for this label if not present
+                    if label not in active_objects:
+                        active_objects[label] = []
+
+                    matched_instance = None
+                    max_iou = 0
+
+                    # Iterate over existing active instances of this label to find a match
+                    for obj in active_objects[label]:
+                        iou = compute_iou(box_coordinates, obj["last_box"])
+                        if iou > iou_threshold and iou > max_iou:
+                            max_iou = iou
+                            matched_instance = obj
+
+                    if matched_instance:
+                        # Update existing instance
+                        matched_instance["last_frame"] = frame_number
+                        matched_instance["last_timestamp_ms"] = timestamp_ms
+                        matched_instance["last_box"] = box_coordinates
+
+                        # Add frame data to MongoDB
+                        objects_collection.update_one(
+                            {"_id": matched_instance["instance_id"]},
+                            {"$push": {"frames": {
+                                "frame": frame_number,
+                                "timestamp": timestamp,  # Now includes milliseconds
+                                "box": box_coordinates,
+                                "relative_position": relative_position,
+                                "confidence": confidence
+                            }}}
+                        )
+                    else:
+                        # Create a new instance
+                        instance_id = str(uuid.uuid4())  # Unique identifier for the new instance
+                        new_instance = {
+                            "instance_id": instance_id,
+                            "last_frame": frame_number,
+                            "last_timestamp_ms": timestamp_ms,
+                            "last_box": box_coordinates
+                        }
+                        active_objects[label].append(new_instance)
+
+                        # Create a new document in MongoDB for this instance
+                        new_doc = {
+                            "_id": instance_id,
+                            "video_name": video_name,
+                            "object_name": label,
+                            "frames": [{
+                                "frame": frame_number,
+                                "timestamp": timestamp,  # Now includes milliseconds
+                                "box": box_coordinates,
+                                "relative_position": relative_position,
+                                "confidence": confidence
+                            }]
+                        }
+                        objects_collection.insert_one(new_doc)
+
+            # Remove expired objects (based on timeout threshold)
+            for label, instances in list(active_objects.items()):
+                active_objects[label] = [
+                    obj for obj in instances 
+                    if (timestamp_ms - obj["last_timestamp_ms"]) <= timeout_threshold
+                ]
+                if not active_objects[label]:
+                    del active_objects[label]
+
+            # Increment frame number
+            frame_number += 1
+
+            # Update the progress bar
+            pbar.update(1)
 
     cap.release()
-    return metadata
 
-def compute_file_hash(file_path):
-    hash_sha256 = hashlib.sha256()
-    with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_sha256.update(chunk)
-    return hash_sha256.hexdigest()
+def compute_iou(box1, box2):
+    """
+    Compute the Intersection over Union (IoU) of two bounding boxes.
+    Each box is represented by a list of four coordinates: [x1, y1, x2, y2]
+    """
+    x_left = max(box1[0], box2[0])
+    y_top = max(box1[1], box2[1])
+    x_right = min(box1[2], box2[2])
+    y_bottom = min(box1[3], box2[3])
 
-def is_duplicate_video(file_hash):
-    return collection.find_one({"file_hash": file_hash}) is not None
+    if x_right < x_left or y_bottom < y_top:
+        return 0.0
 
-def upload_to_s3(file_path):
-    file_name = os.path.basename(file_path)
-    try:
-        s3_client.upload_file(file_path, BUCKET_NAME, file_name)
-        return f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_name}"
-    except Exception as e:
-        print(f"Error uploading to S3: {e}")
-        return None
+    intersection_area = (x_right - x_left) * (y_bottom - y_top)
 
-def save_video_metadata(file_name, file_hash, metadata, s3_url):
+    box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
+
+    iou = intersection_area / float(box1_area + box2_area - intersection_area)
+    return iou
+
+def save_video_objects(file_name, metadata, s3_url):
     video_document = {
         "file_name": file_name,
-        "file_hash": file_hash,
-        "upload_date": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "s3_url": s3_url,
         "metadata": metadata
     }
     collection.insert_one(video_document)
 
 def calculate_relative_position(box, frame_width, frame_height):
-    x_center = (box[0] + box[2]) / 2 / frame_width
-    y_center = (box[1] + box[3]) / 2 / frame_height
+    """
+    Calculate the relative position of the object in the frame.
+    Returns [x_center_relative, y_center_relative]
+    """
+    x1, y1, x2, y2 = box
+    x_center = (x1 + x2) / 2 / frame_width
+    y_center = (y1 + y2) / 2 / frame_height
     return [x_center, y_center]
 
-def convert_ms_to_timestamp(milliseconds):
-    seconds = int(milliseconds / 1000)
-    return f"{seconds // 3600:02}:{(seconds % 3600) // 60:02}:{seconds % 60:02}"
+
+def convert_ms_to_timestamp(ms):
+    """
+    Convert milliseconds to a timestamp string in the format "HH:MM:SS.mmm".
+    """
+    seconds = ms / 1000
+    return datetime.utcfromtimestamp(seconds).strftime('%H:%M:%S.%f')[:-3]
+
+#def upload_to_s3(file_path):
+#     file_name = os.path.basename(file_path)
+#     try:
+#         s3_client.upload_file(file_path, BUCKET_NAME, file_name)
+#         return f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_name}"
+#     except Exception as e:
+#         print(f"Error uploading to S3: {e}")
+#         return None

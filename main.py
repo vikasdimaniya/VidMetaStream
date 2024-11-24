@@ -1,4 +1,4 @@
-from process_video import save_video_metadata, process_video, compute_file_hash
+from process_video import save_video_objects, process_video
 from query_engine import query_menu
 import threading
 import time
@@ -11,6 +11,8 @@ load_dotenv()
 
 mongo_user_name = os.getenv("MONGO_USERNAME")
 mongo_password = os.getenv("MONGO_PASSWORD")
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 BUCKET_NAME = "adtbucket"
 db_name = "vidmetastream"
 
@@ -19,20 +21,23 @@ client = MongoClient(uri)
 db = client[db_name]
 collection = db["videos"]
 
+s3 = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY,
+    region_name=os.getenv("AWS_DEFAULT_REGION"),
+)
+
 # Function to download a file from S3
 def download_from_s3(s3_key, local_path):
     try:
-        s3.download_file(bucket_name, s3_key, local_path)
+        s3.download_file(BUCKET_NAME, s3_key, local_path)
         absolute_path = os.path.abspath(local_path)  # Convert to absolute path
-        print(f"Downloaded {s3_key} to {absolute_path}")
+        print(f"1Downloaded {s3_key} to {absolute_path}")
         return absolute_path
     except Exception as e:
         print(f"Error downloading {s3_key}: {e}")
         return None
-
-# AWS S3 setup
-s3 = boto3.client('s3', region_name='us-east-2')  # Specify your region
-bucket_name = 'adtproject'  # Replace with your S3 bucket name
 
 # Function to perform the find_one_and_update operation
 def find_and_update_task():
@@ -47,7 +52,8 @@ def find_and_update_task():
             
             if result:
                 print(f"Updated document: {result}")
-                s3_key = result.get("uploadTempLocation")
+                s3_key = str(result.get("_id"))
+                print(f"s3_key: {s3_key}")
                 if s3_key:
                     # Define a local path to save the file
                     local_path = os.path.join("downloads", s3_key)
@@ -57,13 +63,13 @@ def find_and_update_task():
 
                     # Download the file from S3
                     vid_path = download_from_s3(s3_key, local_path)
+                    print(f"2Downloaded {s3_key} to {local_path} (or {vid_path})")
                     
                     # Pass the absolute path to the processing module
                     if vid_path:
-                        file_hash = compute_file_hash(vid_path)
                         metadata = process_video(vid_path)
-                        s3_url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
-                        save_video_metadata(vid_path, file_hash, metadata, s3_url)
+                        s3_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
+                        save_video_objects(vid_path, metadata, s3_url)
                         print("Video processed and metadata saved.")
                     else:
                         print(f"Skipping processing for {s3_key} due to download failure.")
@@ -104,4 +110,9 @@ def main_menu():
             print("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
-    main_menu()
+    find_and_update_task()
+
+{"_id":{"$oid":"674240e24030724e7e817944"},"title":"1","description":"This is the first video","filename":"1.mov","status":"uploaded","__v":{"$numberInt":"0"}}
+
+{"_id":{"$oid":"674242054030724e7e817947"},"title":"1","description":"This is the first video","filename":"1.mov","status":"uploaded","__v":{"$numberInt":"0"}}
+
