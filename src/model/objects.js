@@ -4,7 +4,7 @@ const objectSchema = new mongoose.Schema({
     video_id: String,
     object_name: String,
     start_time: Number,
-    end_time: Object,
+    end_time: Number,
     location: Array
 });
-module.exports = mongoose.model('object', objectSchema);
+module.exports = mongoose.model('objects-decimal', objectSchema);

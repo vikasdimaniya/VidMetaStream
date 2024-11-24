@@ -9,37 +9,20 @@ module.exports = {
         let query = {}
         query.video_id = videoId;
         query.object_name = object;
-        query["$or"] = [
-            { 
-                "$and": [
-                    {startTime: { $gte: window.startTime}},
-                    {endTime: {$lte: window.endTime}}
-                ]
+        query["$and"] = [
+            {
+                "start_time": { "$lte": endTime } // The document's start_time must be less than or equal to the window's end
             },
-            { 
-                "$and": [
-                    {startTime: { $lte: window.startTime}},
-                    {endTime: {$lte: window.endTime}}
-                ]
-            },
-            { 
-                "$and": [
-                    {startTime: { $gte: window.startTime}},
-                    {endTime: {$gte: window.endTime}}
-                ]
-            },
-            { 
-                "$and": [
-                    {startTime: { $lte: window.startTime}},
-                    {endTime: {$gte: window.endTime}}
-                ]
-            },
+            {
+                "end_time": { "$gte": startTime }       // The document's end_time must be greater than or equal to the window's start
+            }
         ]
-        return;
+        let results = await db.objects.find(query);
+        return results;
     },
-    queryVideos: async (objects) => {
+    queryVideos: async (object) => {
         let query = {};
-        query.object_name = { $in: objects };
+        query.object_name = object;
         let results = await db.objects.find(query);
         return results;
     }
