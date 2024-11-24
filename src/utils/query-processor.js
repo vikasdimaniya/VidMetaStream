@@ -2,42 +2,66 @@ const queryService = require('../services/query-processor.js');
 const timeWindowsUtils = require('../utils/time-windows.js');
 module.exports = {
     queryObjects: async (objects) => {
-        let results = {};
-        let firstObjectResult = await queryService.queryVideos(objects[0]);
-        for (let result of firstObjectResult) {
-            let firstParentWindow = timeWindowsUtils.getTimings(result);
-            let parentWindows = [firstParentWindow];
-            for (let i = 1; i < objects.length; i++) {
-                let currentObjectResults = [];
-                for (let window of parentWindows) {
-                    let overlappingWindows = await queryService.queryVideosWithInSpecificTime(result.video_id, objects[i], window.startTime, window.endTime);
-                    // if (overlappingWindows) {
-                    //     currentObjectResults = [...currentObjectResults, ...overlappingWindows];
-                    // }
-                    for (let mini of overlappingWindows) {
-                        let currentWindow = timeWindowsUtils.getTimings(mini);
-                        let newWindow = timeWindowsUtils.calculateOverlapingTimings(currentWindow, window);
-                        currentObjectResults.push(newWindow);
+        let results = {}; // Initialize results object to store merged windows by video_id
+    
+        // Query the first object to get the initial set of video results
+        let initialObjectResults = await queryService.queryVideos(objects[0]);
+    
+        // Iterate over each result from the first query
+        for (let videoResult of initialObjectResults) {
+            let initialWindow = timeWindowsUtils.getTimings(videoResult); // Get timings for the current result
+            let activeWindows = [initialWindow]; // Initialize active windows for the first object
+    
+            // Process the remaining objects
+            for (let objectIndex = 1; objectIndex < objects.length; objectIndex++) {
+                let nextObjectWindows = []; // Store results for the current object
+    
+                // Check for overlapping windows in the current time frame
+                for (let activeWindow of activeWindows) {
+                    // Query for overlapping windows within the current time window
+                    let overlappingWindows = await queryService.queryVideosWithInSpecificTime(
+                        videoResult.video_id, 
+                        objects[objectIndex], 
+                        activeWindow.startTime, 
+                        activeWindow.endTime
+                    );
+    
+                    // Iterate over the overlapping windows and calculate new windows
+                    for (let overlapWindow of overlappingWindows) {
+                        let currentWindow = timeWindowsUtils.getTimings(overlapWindow); // Get timings for the current result
+                        let calculatedWindow = timeWindowsUtils.calculateOverlapingTimings(currentWindow, activeWindow); // Calculate overlapping time windows
+                        nextObjectWindows.push(calculatedWindow); // Add the new window to the results
                     }
                 }
-                parentWindows = currentObjectResults;
+    
+                // Update active windows for the next iteration
+                activeWindows = nextObjectWindows;
             }
-            if (parentWindows.length > 0){
-                if (results.hasOwnProperty(result.video_id)) {
-                    results[result.video_id].windows = [...results[result.video_id].windows, ...parentWindows];
+    
+            // If valid windows are found, add them to the results object
+            if (activeWindows.length > 0) {
+                if (results.hasOwnProperty(videoResult.video_id)) {
+                    // Append new windows to existing windows for this video_id
+                    results[videoResult.video_id].windows = [...results[videoResult.video_id].windows, ...activeWindows];
                 } else {
-                    results[result.video_id] = {windows: parentWindows};
+                    // Initialize windows for this video_id
+                    results[videoResult.video_id] = { windows: activeWindows };
                 }
             }
         }
+    
+        // Merge overlapping or contiguous windows for all video IDs
         results = timeWindowsUtils.mergeTimeWindows(results);
-        let formatedResults;
-        for (let id of Object.keys(results)) {
-            formatedResults = {
-                video_id: id,
-                windows: results[id].windows
-            }
+    
+        // Format results into an array of objects with video_id and corresponding windows
+        let formattedResults = [];
+        for (let videoId of Object.keys(results)) {
+            formattedResults.push({
+                video_id: videoId,
+                windows: results[videoId].windows,
+            });
         }
-        return formatedResults;
+    
+        return formattedResults; // Return the formatted results
     }
 }
