@@ -1,4 +1,4 @@
-from process_video import save_video_objects, process_video
+from process_video import process_video
 from query_engine import query_menu
 import threading
 import time
@@ -67,9 +67,9 @@ def find_and_update_task():
                     
                     # Pass the absolute path to the processing module
                     if vid_path:
-                        metadata = process_video(vid_path)
-                        s3_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
-                        save_video_objects(vid_path, metadata, s3_url)
+                        process_video(vid_path)
+                        #s3_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
+                        #save_video_objects(vid_path, metadata, s3_url)
                         print("Video processed and metadata saved.")
                     else:
                         print(f"Skipping processing for {s3_key} due to download failure.")
