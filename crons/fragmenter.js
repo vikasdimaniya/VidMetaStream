@@ -20,7 +20,7 @@ async function start() {
     await core.initMongo(); // Initialize MongoDB and GridFS
     gridFSBucket = core.getGridFSBucket();
     while (true) {
-        let video = await db.video.findOneAndUpdate({ status: 'analyzed' }, { status: 'fragmenting' }, { new: true });
+        let video = await db.video.findOneAndUpdate({ _id: "674240e24030724e7e817944" }, { status: 'fragmenting' }, { new: true });
         if (!video) {
             console.log("No videos to fragment");
             await sleep(2000);
@@ -33,20 +33,20 @@ async function start() {
         if (!fs.existsSync("temp/downloads/")) {
             fs.mkdirSync("temp/downloads/", { recursive: true });
         }
-        let downloaded = await S3Service.downloadVideo(process.env.AWS_BUCKET_NAME, video._id.toString(), downloadPath);
+        //let downloaded = await S3Service.downloadVideo(process.env.AWS_BUCKET_NAME, video._id.toString(), downloadPath);
         const inputFilePath = downloadPath; // Path to the input video file
         const outputDir = 'temp/fragmented/' + video._id + "/"; // Path to output directory for chunks
 
         // Split video into 5-second chunks
-        await ffmpegUtils.splitVideoIntoChunks(inputFilePath, outputDir);
-
+        let timestamps = await ffmpegUtils.splitVideoIntoChunks(inputFilePath, outputDir);
+        console.log(timestamps);
         // Update video status to 'fragmented'
         video.status = 'fragmented';
         await video.save();
 
         // store the fragmented files in gridfs
         //await storeInGridFS(outputDir);
-        let x = await chunkStorage.uploadAllFilesToGridfs(gridFSBucket, outputDir);
+        let x = await chunkStorage.uploadAllFilesToGridfs(gridFSBucket, video._id, outputDir, timestamps);
         console.log(x);
         try {
             fs.rmdirSync(outputDir, { recursive: true });
