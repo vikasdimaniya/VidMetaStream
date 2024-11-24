@@ -1,6 +1,7 @@
 const Fastify = require('fastify');
 const multipart = require('@fastify/multipart');
 const videoRoutes = require('./src/routes/video.js'); // Import video routes
+const queryProcessorRoutes = require("./src/routes/query-processor.js");
 const core = require("./core.js") //initializes parameters
 let app = Fastify({
     logger: true
@@ -17,5 +18,6 @@ app.get('/ping', async function (req, reply) {
 });
 
 app.register(videoRoutes);
+app.register(queryProcessorRoutes);
 
 module.exports = app;
