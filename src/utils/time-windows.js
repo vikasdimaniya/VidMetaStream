@@ -53,5 +53,26 @@ module.exports = {
         }
 
         return mergedResults;
+    },
+    /**
+     * Checks if a relative position is within a given region.
+     * @param {Array} relativePosition - [x, y] coordinates (0 to 1).
+     * @param {Array} regionCoordinates - [x1, y1, x2, y2] coordinates (0 to 1).
+     * @returns {Boolean} - True if within the region, else false.
+     */
+    isWithinRegion: function (relativePosition, regionCoordinates) {
+        const [x1, y1, x2, y2] = regionCoordinates;
+        const [x, y] = relativePosition;
+        return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+    },
+
+    /**
+     * Calculates the duration between two timestamps in seconds.
+     * @param {Number} startTime - Start time in seconds.
+     * @param {Number} endTime - End time in seconds.
+     * @returns {Number} - Duration in seconds.
+     */
+    calculateDuration: function (startTime, endTime) {
+        return endTime - startTime;
     }
 }
