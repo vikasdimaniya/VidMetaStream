@@ -11,6 +11,23 @@ async function videoRoutes(app) {
     app.get('/query/spatialObjects', {
         handler: queryProcessorAPIs.querySpatialObjects
     });
+    app.get('/query/spatialObjectsAnd', {
+        handler: queryProcessorAPIs.querySpatialObjectsAnd
+    });
+    // Finding Instances of the same class ex person
+    app.get('/query/queryDistinctInstances', {
+        handler: queryProcessorAPIs.queryInstances
+    });
+    // Finding overlap of the same class ex person and person
+    app.get('/query/queryInstanceOverlaps', {
+        handler: queryProcessorAPIs.queryInstanceOverlaps
+    });
+    // Utilizig overla of the same class ex person and person
+    // and finding if it occurs in a desired area
+    app.get('/query/queryInstanceOverlapsInArea', {
+        handler: queryProcessorAPIs.queryInstanceOverlapsInArea
+    });   
+
 }
 
 module.exports = videoRoutes;

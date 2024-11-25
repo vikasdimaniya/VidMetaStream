@@ -1,16 +1,7 @@
 require('dotenv').config();
-console.log("AWS_REGION:", process.env.AWS_REGION);
 const mongoose = require('mongoose');
-const { S3Client } = require('@aws-sdk/client-s3');
-const s3Client = new S3Client({
-    region: process.env.AWS_REGION,
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    },
-});
 
-const mongoURI = 'mongodb://localhost:27017';
+const mongoURI = process.env.MONGODB_URI;
 const dbName = 'vidmetastream';
 
 let db;
@@ -18,26 +9,29 @@ let gridFSBucket;
 
 async function initMongo() {
     try {
-        const connection = await mongoose.connect(process.env.MONGODB_URI, {
+        await mongoose.connect(mongoURI, {
             dbName: dbName,
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-        }); // Connect to MongoDB
-        db = mongoose.connection; // Access the native MongoDB driver’s DB instance
+        });
+        db = mongoose.connection; // Wait for the connection
+        await new Promise((resolve, reject) => {
+            db.once('open', resolve);
+            db.on('error', reject);
+        });
         console.log('Connected to MongoDB');
-        gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
-            bucketName: "filesBucket",
+
+        // Initialize GridFSBucket after the connection is open
+        gridFSBucket = new mongoose.mongo.GridFSBucket(db.db, {
+            bucketName: 'filesBucket',
         });
         console.log('Connected to GridFS');
     } catch (error) {
         console.error('Error connecting to MongoDB:', error);
-        throw error; // Re-throw the error for proper handling
+        throw error;
     }
 }
 
 module.exports = {
     initMongo,
-    getDb: () => db,
+    getDb: () => db.db, // Ensure this points to the correct MongoDB instance
     getGridFSBucket: () => gridFSBucket,
-    s3Client
 };
