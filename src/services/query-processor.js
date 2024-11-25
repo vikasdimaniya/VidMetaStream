@@ -50,5 +50,32 @@ module.exports = {
         }
 
         return results; // Return all matching files
-    }
+    },
+    getObjectData: async (objects) => {
+        try {
+            // Log the query to debug
+            console.log("Querying objects with:", objects);
+
+            // Query the 'objects-decimal' model for specified object names
+            const results = await db.objects.find({ object_name: { $in: objects } });
+
+            // Log the raw results
+            console.log("Query results:", results);
+
+            // Transform the results to the desired structure
+            const transformedResults = results.map((result) => ({
+                video_id: result.video_id,
+                object_name: result.object_name,
+                frames: result.frames || [], // Ensure frames are included, default to an empty array
+            }));
+
+            // Log the transformed results
+            console.log("Transformed results:", transformedResults);
+
+            return transformedResults;
+        } catch (error) {
+            console.error("Error in getObjectData:", error);
+            throw error; // Re-throw the error for higher-level handling
+        }
+    },
 };

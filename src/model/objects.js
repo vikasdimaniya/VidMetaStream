@@ -5,6 +5,6 @@ const objectSchema = new mongoose.Schema({
     object_name: String,
     start_time: Number,
     end_time: Number,
-    location: Array
+    frames: Array
 });
 module.exports = mongoose.model('objects-decimal', objectSchema);
