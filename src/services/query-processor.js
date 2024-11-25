@@ -25,5 +25,30 @@ module.exports = {
         query.object_name = object;
         let results = await db.objects.find(query);
         return results;
+    },
+    getVideoFilesForTimeWindows: async (queryWindows) => {
+        const results = [];
+
+        for (const queryWindow of queryWindows) {
+            const { video_id, windows } = queryWindow;
+
+            for (const window of windows) {
+                const { startTime, endTime } = window;
+
+                // MongoDB query to find overlapping files
+                const matchingFiles = await db.collection('fs.files').find({
+                    'metadata.videoID': video_id,
+                    $and: [
+                        { 'metadata.startTimestamp': { $lt: endTime } }, // File starts before query ends
+                        { 'metadata.endTimestamp': { $gt: startTime } }  // File ends after query starts
+                    ]
+                }).toArray();
+
+                // Append matching files to results
+                results.push(...matchingFiles);
+            }
+        }
+
+        return results; // Return all matching files
     }
 };

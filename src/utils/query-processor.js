@@ -1,5 +1,7 @@
 const queryService = require('../services/query-processor.js');
 const timeWindowsUtils = require('../utils/time-windows.js');
+const gridFSStorage = require('../services/chunk-storage.js');
+const fs = require('fs');
 module.exports = {
     queryObjects: async (objects) => {
         let results = {}; // Initialize results object to store merged windows by video_id
@@ -63,5 +65,31 @@ module.exports = {
         }
     
         return formattedResults; // Return the formatted results
-    }
+    },
+    downloadVideoChunk: async (videoId, startTime, endTime) => {
+        // Get matching files metadata for the specified time window
+        let files = await queryService.getVideoFilesForTimeWindows([
+            {
+                video_id: videoId,
+                windows: [{ startTime, endTime }],
+            },
+        ]);
+
+        // Ensure the output directory exists
+        const outputDir = path.join('./temp/combiner', videoId);
+        if (!fs.existsSync(outputDir)) {
+            fs.mkdirSync(outputDir, { recursive: true });
+        }
+
+        // Download each matching file to the output directory
+        for (let file of files) {
+            const destinationPath = path.join(outputDir, path.basename(file.filename));
+            console.log(`Starting download for file: ${file.filename}`);
+
+            // Use the gridFSStorage layer to handle the file download
+            await gridFSStorage.downloadFile(file._id, destinationPath);
+        }
+
+        console.log(`All files downloaded to: ${outputDir}`);
+    },
 }

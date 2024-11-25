@@ -52,4 +52,39 @@ module.exports = {
         let results = await Promise.all(promiseList);
         return results;
     },
+    /**
+     * Downloads a file from GridFS to a specified local path.
+     * @param {ObjectId} fileId - The GridFS file ID to download.
+     * @param {string} destinationPath - The local file path where the file will be saved.
+     * @returns {Promise<void>}
+     */
+    downloadFile: async (fileId, destinationPath) => {
+        const bucket = new GridFSBucket(db, { bucketName: 'fs' });
+
+        return new Promise((resolve, reject) => {
+            const downloadStream = bucket.openDownloadStream(fileId);
+            const writeStream = fs.createWriteStream(destinationPath);
+
+            downloadStream
+                .pipe(writeStream)
+                .on('finish', () => {
+                    console.log(`File downloaded to: ${destinationPath}`);
+                    resolve();
+                })
+                .on('error', (err) => {
+                    console.error(`Error downloading file ${fileId}:`, err);
+                    reject(err);
+                });
+        });
+    },
+
+    /**
+     * Fetches the metadata of files matching a given query.
+     * @param {Object} query - The MongoDB query to filter files.
+     * @returns {Promise<Array>} - Array of matching file documents.
+     */
+    getFilesMetadata: async (query) => {
+        const files = await db.collection('fs.files').find(query).toArray();
+        return files;
+    },
 };
