@@ -13,12 +13,13 @@ module.exports = {
      */
     queryVideos: async (req, reply) => {
         let objects = req.query.objects;
+        let windowSize = req.query.window_size;
         try{
             objects = JSON.parse(objects);
         }catch(err){
             return reply.send({error: "Invalid JSON"});
         }
-        let results = await queryProcessorUtils.queryObjects(objects);
+        let results = await queryProcessorUtils.queryObjects(objects, windowSize);
         return reply.send(results);
     },
     /**
@@ -102,6 +103,36 @@ module.exports = {
             return reply.send(result);
         } catch (error) {
             console.error("Error querying spatial objects:", error);
+            return reply.code(500).send({ error: "Internal Server Error" });
+        }
+    },
+    /**
+     * Handles queries for sequences of objects appearing in order.
+     * @param {*} req 
+     * @param {*} reply 
+     * @returns List of video sections where the objects appear in the specified sequence.
+     */
+    querySequence: async (req, reply) => {
+        let sequence;
+        let windowSize = parseInt(req.query.window_size) || 0;
+
+        // Parse and validate the sequence
+        try {
+            sequence = JSON.parse(req.query.sequence);
+        } catch (err) {
+            return reply.code(400).send({ error: "Invalid JSON for sequence" });
+        }
+
+        if (!Array.isArray(sequence) || sequence.length < 2) {
+            return reply.code(400).send({ error: "Sequence must be an array of at least two object names" });
+        }
+
+        try {
+            // Pass to query processor utils
+            const result = await queryProcessorUtils.querySequence(sequence, windowSize);
+            return reply.send(result);
+        } catch (error) {
+            console.error("Error querying sequence of objects:", error);
             return reply.code(500).send({ error: "Internal Server Error" });
         }
     },

@@ -13,6 +13,9 @@ async function videoRoutes(app) {
     });
     app.get('/query/chunk/download/:chunk_id', {
         handler: queryProcessorAPIs.downloadVideoChunk
+    });
+    app.get('/query/tempral/objects', {
+        handler: queryProcessorAPIs.querySequence
     })
 }
 

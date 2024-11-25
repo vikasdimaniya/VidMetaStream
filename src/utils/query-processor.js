@@ -6,7 +6,7 @@ const fs = require('fs');
 const core = require('../../core.js');
 const path = require('path');
 module.exports = {
-    queryObjects: async (objects) => {
+    queryObjects: async (objects, windowSize) => {
         let results = {}; // Initialize results object to store merged windows by video_id
 
         // Query the first object to get the initial set of video results
@@ -67,6 +67,10 @@ module.exports = {
             });
         }
 
+        // remove videos whose windows are less than the window size
+        formattedResults = formattedResults.filter((result) => {
+            return result.windows.length >= windowSize;
+        });
         return formattedResults; // Return the formatted results
     },
     getVideoChunk: async (videoId, windows) => {
@@ -147,7 +151,29 @@ module.exports = {
     },
     downloadFileAsStream: async (fileId, destinationPath) => {
         return await gridFSStorage.downloadFileAsStream(core.getGridFSBucket(), fileId, destinationPath);
-    }
+    },
+    /**
+     * Queries for video segments where objects appear in a specified sequence.
+     * @param {Array} sequence - An array of object names in the order they should appear.
+     * @param {number} windowSize - Minimum duration for the sequence.
+     * @returns {Promise<Array>} - An array of video sections with the sequence.
+     */
+    querySequence: async (sequence, windowSize) => {
+        const objectData = await queryService.getObjectData(sequence);
+
+        // Organize object data by video_id
+        console.log(objectData);
+        let objectIntervals = {};
+        for (let object in objects) {
+            if (!objectIntervals.hasOwnProperty(object.object_name)) {
+                objectIntervals[object.object_name] = [object.start_time];
+            } else {
+                objectIntervals[object.object_name].push(object.start_time);
+            }
+        }
+
+        
+    },
 };
 
 // Helper function to check if a point is within a defined region
