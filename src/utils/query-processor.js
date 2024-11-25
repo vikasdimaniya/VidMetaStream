@@ -3,32 +3,34 @@ const queryService = require('../services/query-processor.js');
 const timeWindowsUtils = require('../utils/time-windows.js');
 const gridFSStorage = require('../services/chunk-storage.js');
 const fs = require('fs');
+const core = require('../../core.js');
+const path = require('path');
 module.exports = {
     queryObjects: async (objects) => {
         let results = {}; // Initialize results object to store merged windows by video_id
-    
+
         // Query the first object to get the initial set of video results
         let initialObjectResults = await queryService.queryVideos(objects[0]);
-    
+
         // Iterate over each result from the first query
         for (let videoResult of initialObjectResults) {
             let initialWindow = timeWindowsUtils.getTimings(videoResult); // Get timings for the current result
             let activeWindows = [initialWindow]; // Initialize active windows for the first object
-    
+
             // Process the remaining objects
             for (let objectIndex = 1; objectIndex < objects.length; objectIndex++) {
                 let nextObjectWindows = []; // Store results for the current object
-    
+
                 // Check for overlapping windows in the current time frame
                 for (let activeWindow of activeWindows) {
                     // Query for overlapping windows within the current time window
                     let overlappingWindows = await queryService.queryVideosWithInSpecificTime(
-                        videoResult.video_id, 
-                        objects[objectIndex], 
-                        activeWindow.startTime, 
+                        videoResult.video_id,
+                        objects[objectIndex],
+                        activeWindow.startTime,
                         activeWindow.endTime
                     );
-    
+
                     // Iterate over the overlapping windows and calculate new windows
                     for (let overlapWindow of overlappingWindows) {
                         let currentWindow = timeWindowsUtils.getTimings(overlapWindow); // Get timings for the current result
@@ -36,11 +38,11 @@ module.exports = {
                         nextObjectWindows.push(calculatedWindow); // Add the new window to the results
                     }
                 }
-    
+
                 // Update active windows for the next iteration
                 activeWindows = nextObjectWindows;
             }
-    
+
             // If valid windows are found, add them to the results object
             if (activeWindows.length > 0) {
                 if (results.hasOwnProperty(videoResult.video_id)) {
@@ -52,10 +54,10 @@ module.exports = {
                 }
             }
         }
-    
+
         // Merge overlapping or contiguous windows for all video IDs
         results = timeWindowsUtils.mergeTimeWindows(results);
-    
+
         // Format results into an array of objects with video_id and corresponding windows
         let formattedResults = [];
         for (let videoId of Object.keys(results)) {
@@ -64,34 +66,13 @@ module.exports = {
                 windows: results[videoId].windows,
             });
         }
-    
+
         return formattedResults; // Return the formatted results
     },
-    downloadVideoChunk: async (videoId, startTime, endTime) => {
+    getVideoChunk: async (videoId, windows) => {
         // Get matching files metadata for the specified time window
-        let files = await queryService.getVideoFilesForTimeWindows([
-            {
-                video_id: videoId,
-                windows: [{ startTime, endTime }],
-            },
-        ]);
-
-        // Ensure the output directory exists
-        const outputDir = path.join('./temp/combiner', videoId);
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-        }
-
-        // Download each matching file to the output directory
-        for (let file of files) {
-            const destinationPath = path.join(outputDir, path.basename(file.filename));
-            console.log(`Starting download for file: ${file.filename}`);
-
-            // Use the gridFSStorage layer to handle the file download
-            await gridFSStorage.downloadFile(file._id, destinationPath);
-        }
-
-        console.log(`All files downloaded to: ${outputDir}`);
+        let files = await gridFSStorage.getVideoFilesForTimeWindows(core.getGridFSBucket(), videoId, windows);
+        return files;
     },
 
     // query spatial objects async func handler
@@ -154,7 +135,20 @@ module.exports = {
 
         return results;
     },
-}
+    /**
+      * Fetch the file metadata by chunk ID.
+      * @param {string} chunkId - The chunk's GridFS ID.
+      * @returns {Promise<Object>} - Metadata of the file.
+      */
+    getChunk: async (chunkId) => {
+        // Get the file metadata for the specified chunk ID
+        let file = await gridFSStorage.getChunk(core.getGridFSBucket(), chunkId);
+        return file;
+    },
+    downloadFileAsStream: async (fileId, destinationPath) => {
+        return await gridFSStorage.downloadFileAsStream(core.getGridFSBucket(), fileId, destinationPath);
+    }
+};
 
 // Helper function to check if a point is within a defined region
 const isWithinRegion = (point, region) => {

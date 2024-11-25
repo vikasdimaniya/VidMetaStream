@@ -5,12 +5,15 @@ async function videoRoutes(app) {
     app.get('/query/objects', {
         handler: queryProcessorAPIs.queryVideos
     });
-    app.post('/download/videos', {
-        handler: queryProcessorAPIs.downloadVideoChunks
-    });
     app.get('/query/spatialObjects', {
         handler: queryProcessorAPIs.querySpatialObjects
     });
+    app.post('/query/chunks', {
+        handler: queryProcessorAPIs.getVideoChunks
+    });
+    app.get('/query/chunk/download/:chunk_id', {
+        handler: queryProcessorAPIs.downloadVideoChunk
+    })
 }
 
 module.exports = videoRoutes;

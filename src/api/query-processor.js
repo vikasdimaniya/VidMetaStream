@@ -1,5 +1,7 @@
 // src/api/query-processor
 const queryProcessorUtils = require('../utils/query-processor.js');
+const path = require('path');
+const fs = require('fs');
 
 module.exports = {
     /**
@@ -29,15 +31,34 @@ module.exports = {
      * ]
      * 
      */
-    downloadVideoChunks: async (req, reply) => {
+    getVideoChunks: async (req, reply) => {
+        let response = [];
         let videos = req.body.videos;
-        for (let i = 0; i < videos.length; i++) {
-            let video = videos[i];
-            let videoId = video.video_id;
-            let startTime = video.start_time;
-            let endTime = video.end_time;
-            await queryProcessorUtils.downloadVideoChunk(videoId, startTime, endTime);
+        for (let video of videos) {
+            let result = await queryProcessorUtils.getVideoChunk(video.video_id, video.windows);
+            if (result) {
+                response.push(result);
+            }
         }
+        return reply.send(response);
+    },
+    downloadVideoChunk: async (req, reply) => {
+        const chunkId = req.params.chunk_id;
+
+        // Fetch the chunk metadata from GridFS
+        let file = await queryProcessorUtils.getChunk(chunkId);
+
+        // Set headers for downloading the file
+        reply.header('Content-Disposition', `attachment; filename="${path.basename(file.filename)}"`);
+        reply.type('application/octet-stream'); // Generic binary file type
+
+        console.log(`Starting streaming download for file: ${file.filename}`);
+
+        // Stream the file directly from GridFS to the client
+        const downloadStream = await queryProcessorUtils.downloadFileAsStream(file._id);
+
+        // Pipe the file stream into the response
+        return reply.send(downloadStream);
     },
     // query video funciton for spatial queries
     querySpatialObjects: async (req, reply) => {
