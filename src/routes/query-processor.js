@@ -5,9 +5,6 @@ async function videoRoutes(app) {
     app.get('/query/objects', {
         handler: queryProcessorAPIs.queryVideos
     });
-    app.post('/download/videos', {
-        handler: queryProcessorAPIs.downloadVideoChunks
-    });
     app.get('/query/spatialObjects', {
         handler: queryProcessorAPIs.querySpatialObjects
     });
@@ -28,6 +25,15 @@ async function videoRoutes(app) {
         handler: queryProcessorAPIs.queryInstanceOverlapsInArea
     });   
 
+    app.post('/query/chunks', {
+        handler: queryProcessorAPIs.getVideoChunks
+    });
+    app.get('/query/chunk/download/:chunk_id', {
+        handler: queryProcessorAPIs.downloadVideoChunk
+    });
+    app.get('/query/tempral/objects', {
+        handler: queryProcessorAPIs.querySequence
+    })
 }
 
 module.exports = videoRoutes;

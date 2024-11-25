@@ -294,29 +294,29 @@ module.exports = {
     mergeOverlappingIntervals,
     queryObjects: async (objects) => {
         let results = {}; // Initialize results object to store merged windows by video_id
-    
+
         // Query the first object to get the initial set of video results
         let initialObjectResults = await queryService.queryVideos(objects[0]);
-    
+
         // Iterate over each result from the first query
         for (let videoResult of initialObjectResults) {
             let initialWindow = timeWindowsUtils.getTimings(videoResult); // Get timings for the current result
             let activeWindows = [initialWindow]; // Initialize active windows for the first object
-    
+
             // Process the remaining objects
             for (let objectIndex = 1; objectIndex < objects.length; objectIndex++) {
                 let nextObjectWindows = []; // Store results for the current object
-    
+
                 // Check for overlapping windows in the current time frame
                 for (let activeWindow of activeWindows) {
                     // Query for overlapping windows within the current time window
                     let overlappingWindows = await queryService.queryVideosWithInSpecificTime(
-                        videoResult.video_id, 
-                        objects[objectIndex], 
-                        activeWindow.startTime, 
+                        videoResult.video_id,
+                        objects[objectIndex],
+                        activeWindow.startTime,
                         activeWindow.endTime
                     );
-    
+
                     // Iterate over the overlapping windows and calculate new windows
                     for (let overlapWindow of overlappingWindows) {
                         let currentWindow = timeWindowsUtils.getTimings(overlapWindow); // Get timings for the current result
@@ -324,11 +324,11 @@ module.exports = {
                         nextObjectWindows.push(calculatedWindow); // Add the new window to the results
                     }
                 }
-    
+
                 // Update active windows for the next iteration
                 activeWindows = nextObjectWindows;
             }
-    
+
             // If valid windows are found, add them to the results object
             if (activeWindows.length > 0) {
                 if (results.hasOwnProperty(videoResult.video_id)) {
@@ -340,10 +340,10 @@ module.exports = {
                 }
             }
         }
-    
+
         // Merge overlapping or contiguous windows for all video IDs
         results = timeWindowsUtils.mergeTimeWindows(results);
-    
+
         // Format results into an array of objects with video_id and corresponding windows
         let formattedResults = [];
         for (let videoId of Object.keys(results)) {
@@ -352,34 +352,17 @@ module.exports = {
                 windows: results[videoId].windows,
             });
         }
-    
+
+        // remove videos whose windows are less than the window size
+        formattedResults = formattedResults.filter((result) => {
+            return result.windows.length >= windowSize;
+        });
         return formattedResults; // Return the formatted results
     },
-    downloadVideoChunk: async (videoId, startTime, endTime) => {
+    getVideoChunk: async (videoId, windows) => {
         // Get matching files metadata for the specified time window
-        let files = await queryService.getVideoFilesForTimeWindows([
-            {
-                video_id: videoId,
-                windows: [{ startTime, endTime }],
-            },
-        ]);
-
-        // Ensure the output directory exists
-        const outputDir = path.join('./temp/combiner', videoId);
-        if (!fs.existsSync(outputDir)) {
-            fs.mkdirSync(outputDir, { recursive: true });
-        }
-
-        // Download each matching file to the output directory
-        for (let file of files) {
-            const destinationPath = path.join(outputDir, path.basename(file.filename));
-            console.log(`Starting download for file: ${file.filename}`);
-
-            // Use the gridFSStorage layer to handle the file download
-            await gridFSStorage.downloadFile(file._id, destinationPath);
-        }
-
-        console.log(`All files downloaded to: ${outputDir}`);
+        let files = await gridFSStorage.getVideoFilesForTimeWindows(core.getGridFSBucket(), videoId, windows);
+        return files;
     },
 
     //Logic for spatial queries logical OR of objects in space obj x OR y in area

@@ -8,7 +8,7 @@
 const core = require('./../core.js');
 const db = require('../src/db');
 const ffmpegUtils = require('../src/utils/ffmpeg.js');
-const chunkStorage = require('../src/services/chunkStorage');
+const chunkStorage = require('../src/services/chunk-storage.js');
 const fs = require('fs');
 const S3Service = require('../src/services/s3.js');
 
@@ -20,7 +20,7 @@ async function start() {
     await core.initMongo(); // Initialize MongoDB and GridFS
     gridFSBucket = core.getGridFSBucket();
     while (true) {
-        let video = await db.video.findOneAndUpdate({ _id: "674240e24030724e7e817944" }, { status: 'fragmenting' }, { new: true });
+        let video = await db.video.findOneAndUpdate({ status: 'analyzed' }, { status: 'fragmenting' }, { new: true });
         if (!video) {
             console.log("No videos to fragment");
             await sleep(2000);
@@ -33,7 +33,7 @@ async function start() {
         if (!fs.existsSync("temp/downloads/")) {
             fs.mkdirSync("temp/downloads/", { recursive: true });
         }
-        //let downloaded = await S3Service.downloadVideo(process.env.AWS_BUCKET_NAME, video._id.toString(), downloadPath);
+        let downloaded = await S3Service.downloadVideo(process.env.AWS_BUCKET_NAME, video._id.toString(), downloadPath);
         const inputFilePath = downloadPath; // Path to the input video file
         const outputDir = 'temp/fragmented/' + video._id + "/"; // Path to output directory for chunks
 

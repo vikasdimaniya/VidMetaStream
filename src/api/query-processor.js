@@ -1,6 +1,8 @@
 // src/api/query-processor
 const axios = require('axios'); // Assuming you use axios to make HTTP requests
 const queryProcessorUtils = require('../utils/query-processor.js');
+const path = require('path');
+const fs = require('fs');
 
 // Helper function to define relative regions for spatial queries
 const interpretRelativeArea = (region) => {
@@ -145,7 +147,7 @@ module.exports = {
             await queryProcessorUtils.downloadVideoChunk(videoId, startTime, endTime);
         }
     },
-    // query video funciton for spatial queries logical OR of objects in space
+    // query video funciton for spatial queries
     querySpatialObjects: async (req, reply) => {
         let objects;
         let area;
@@ -153,22 +155,37 @@ module.exports = {
         // Parse and validate objects
         try {
             objects = JSON.parse(req.query.objects);
-            if (!objects || !Array.isArray(objects) || objects.length === 0) {
-                return reply.code(400).send({ error: "Invalid 'objects': must be a non-empty array" });
-            }
         } catch (err) {
             return reply.send({ error: "Invalid JSON for objects" });
         }
 
-        // Parse and validate area
-        try {
-            area = validateArea(req.query.area);
-        } catch (err) {
-            return reply.code(400).send({ error: err.message });
+        // Determine the area
+        if (typeof req.query.area === "string") {
+            area = interpretRelativeArea(req.query.area); // Handle shorthand
+            if (!area) {
+                return reply.code(400).send({ error: `Invalid area description: ${req.query.area}` });
+            }
+        } else {
+            try {
+                area = JSON.parse(req.query.area); // Handle explicit bounding box
+            } catch (err) {
+                return reply.send({ error: "Invalid JSON for area" });
+            }
+        }
+
+        // Validate bounding box format
+        if (!area || !Array.isArray(area) || area.length !== 4) {
+            return reply.code(400).send({ error: "Area must be an array with exactly 4 coordinates [x1, y1, x2, y2]" });
         }
 
         try {
-            const result = await queryProcessorUtils.querySpatialObjects({ objects, area });
+            // Pass to query processor utils
+            const result = await queryProcessorUtils.querySpatialObjects({
+                objects,
+                area,
+            });
+
+            // Return the results
             return reply.send(result);
         } catch (error) {
             console.error("Error querying spatial objects:", error);

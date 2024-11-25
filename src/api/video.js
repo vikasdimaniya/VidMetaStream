@@ -83,6 +83,8 @@ module.exports = {
             console.log(saved.errors, saved.error);
             return;
         }
+        // remove the temp file
+        fs.unlinkSync(video.uploadTempLocation);
         return { message: 'files uploaded' };
     }
 }
