@@ -27,6 +27,7 @@ async function initMongo() {
         console.log('Connected to MongoDB');
         gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
             bucketName: "filesBucket",
+            chunkSizeBytes: 1024 * 1024 * 5, // Set chunk size to 5 MB
         });
         console.log('Connected to GridFS');
     } catch (error) {
