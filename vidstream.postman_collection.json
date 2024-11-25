@@ -9,24 +9,11 @@
 	"item": [
 		{
 			"name": "get video",
-			"protocolProfileBehavior": {
-				"disableBodyPruning": true
-			},
 			"request": {
 				"method": "GET",
 				"header": [],
-				"body": {
-					"mode": "formdata",
-					"formdata": [
-						{
-							"key": "movie",
-							"type": "file",
-							"src": "/Users/vikaskumar/Downloads/movie.mkv"
-						}
-					]
-				},
 				"url": {
-					"raw": "http://localhost:8000/video/673f8d4ca7429d36c77eb8b0",
+					"raw": "http://localhost:8000/video/673f9215248eb0fd00621e3e",
 					"protocol": "http",
 					"host": [
 						"localhost"
@@ -34,7 +21,7 @@
 					"port": "8000",
 					"path": [
 						"video",
-						"673f8d4ca7429d36c77eb8b0"
+						"673f9215248eb0fd00621e3e"
 					]
 				}
 			},
@@ -47,7 +34,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"title\": \"1\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"1.mov\"\n}",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -63,6 +50,44 @@
 					"port": "8000",
 					"path": [
 						"video"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "query",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
 					]
 				}
 			},
