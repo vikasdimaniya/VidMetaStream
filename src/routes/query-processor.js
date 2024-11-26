@@ -24,7 +24,10 @@ async function videoRoutes(app) {
     app.get('/query/queryInstanceOverlapsInArea', {
         handler: queryProcessorAPIs.queryInstanceOverlapsInArea
     });   
-
+    // Getting instances of objects at entered time, in seconds
+    app.get('/query/queryInstancesAtTime', {
+        handler: queryProcessorAPIs.queryInstancesAtTime
+    });   
     app.post('/query/chunks', {
         handler: queryProcessorAPIs.getVideoChunks
     });

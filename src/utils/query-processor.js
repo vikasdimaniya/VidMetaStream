@@ -280,8 +280,50 @@ const queryInstanceOverlaps = async ({ object, count }) => {
     return mergedOverlaps;
 };
 
+const getInstancesByObjectAndTime = async (object_name, time) => {
+    console.log(`getFramesByObjectAndTime called with object_name=${object_name} and time=${time.toFixed(3)} seconds`);
+
+    // Get the database connection
+    const db = getDb();
+    if (!db) throw new Error('Database connection is not initialized');
+
+    // Fetch documents matching the object name
+    const documents = await db.collection('objects').find({ object_name }).toArray();
+
+    if (!documents || documents.length === 0) {
+        console.log(`No documents found for object_name=${object_name}`);
+        return [];
+    }
+
+    console.log(`Number of documents retrieved for object_name=${object_name}: ${documents.length}`);
+
+    // Filter instances based on the given time
+    const results = [];
+
+    documents.forEach((doc) => {
+        const { video_id, start_time, end_time, _id: instance_id } = doc;
+
+        // Normalize start_time and end_time
+        const normalizedStartTime = parseFloat(start_time.$numberDecimal || start_time);
+        const normalizedEndTime = parseFloat(end_time.$numberDecimal || end_time);
+
+        // Check if the time falls within the object's time range
+        if (time >= normalizedStartTime && time <= normalizedEndTime) {
+            results.push({
+                video_id,
+                instance_id,
+            });
+        }
+    });
+
+    console.log(`Matching instances for object_name=${object_name} at time=${time.toFixed(3)} seconds:`, results);
+
+    return results;
+};
+
 
 module.exports = {
+    getInstancesByObjectAndTime,
     //gets distinct instance object data from service
     getInstanceData: queryService.getInstanceData,
     queryInstanceOverlaps,

@@ -107,9 +107,56 @@ const queryInstanceOverlapsInArea = async (req, reply) => {
     }
 };
 
+const queryInstancesAtTime = async (req, reply) => {
+    let object, time;
+
+    try {
+        // Parse and validate input parameters
+        object = req.query.object;
+        time = parseFloat(req.query.time);
+
+        if (!object || typeof object !== "string") {
+            return reply.code(400).send({ error: "Invalid 'object': must be a non-empty string" });
+        }
+
+        if (isNaN(time) || time < 0) {
+            return reply.code(400).send({ error: "Invalid 'time': must be a non-negative number" });
+        }
+
+        console.log(`Querying frames for object=${object} at time=${time.toFixed(3)} seconds`);
+    } catch (error) {
+        return reply.code(400).send({ error: "Invalid query parameters" });
+    }
+
+    try {
+        // Use the utility function to fetch the matching frames
+        const instances = await queryProcessorUtils.getInstancesByObjectAndTime(object, time);
+
+        // Respond with results directly
+        if (instances.length > 0) {
+            console.log(`Found instances for object=${object} at time=${time.toFixed(3)} seconds`);
+            return reply.send({
+                object,
+                time,
+                instances,
+            });
+        } else {
+            console.log(`No instances found for object=${object} at time=${time.toFixed(3)} seconds`);
+            return reply.send({
+                object,
+                time,
+                instances: [],
+            });
+        }
+    } catch (error) {
+        console.error("Error querying frames at time:", error);
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+};
 
 
 module.exports = {
+    queryInstancesAtTime,
     /**
      * 
      * @param {*} req 
