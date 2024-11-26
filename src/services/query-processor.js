@@ -1,17 +1,12 @@
-const { getDb } = require('../../core'); // Adjust path if necessary
+const db = require('../db'); // Adjust path if necessary
 
 const getInstanceData = async (objects) => {
     try {
-        const db = getDb();
-        if (!db) {
-            throw new Error('Database not initialized');
-        }
-
         console.log("Objects to query for:", objects);
 
-        const results = await db.collection('objects').find({
+        const results = await db.objects.find({
             object_name: { $in: objects },
-        }).toArray();
+        });
 
         if (!results || results.length === 0) {
             console.log("No results found for objects:", objects);
@@ -37,11 +32,6 @@ const getInstanceData = async (objects) => {
 
 module.exports = {
     queryVideosWithInSpecificTime: async (videoId, object, startTime, endTime) => {
-        const db = getDb();
-        if (!db) {
-            throw new Error('Database not initialized');
-        }
-
         const query = {
             video_id: videoId,
             object_name: object,
@@ -51,26 +41,16 @@ module.exports = {
             ],
         };
 
-        const results = await db.collection('objects').find(query).toArray();
+        const results = await db.objects.find(query);
         return results;
     },
     queryVideos: async (object) => {
-        const db = getDb();
-        if (!db) {
-            throw new Error('Database not initialized');
-        }
-
         const query = { object_name: object };
-        const results = await db.collection('objects').find(query).toArray();
+        const results = await db.objects.find(query);
         return results;
     },
 
     getVideoFilesForTimeWindows: async (queryWindows) => {
-        const db = getDb();
-        if (!db) {
-            throw new Error('Database not initialized');
-        }
-
         const results = [];
 
         for (const queryWindow of queryWindows) {
@@ -96,10 +76,6 @@ module.exports = {
         return results; // Return all matching files
     },
     getObjectData: async (objects) => {
-        const db = getDb();
-        if (!db) {
-            throw new Error('Database not initialized');
-        }
         try {
             // Log the query to debug
             console.log("Querying objects with:", objects);

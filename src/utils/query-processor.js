@@ -3,6 +3,7 @@ const queryService = require('../services/query-processor.js');
 const timeWindowsUtils = require('../utils/time-windows.js');
 const gridFSStorage = require('../services/chunk-storage.js');
 const fs = require('fs');
+const db = require('../db');
 const core = require('../../core.js');
 const path = require('path');
 const logFilePath = path.join(__dirname, 'timestamp_analysis.log');
@@ -13,8 +14,6 @@ const logToFile = (message) => {
 
 // Import getInstanceData directly from queryService
 const getInstanceData = queryService.getInstanceData;
-
-const { getDb } = require('../../core.js');
 
 const incrementTimestamp = (currentTimestamp) => {
     // Extract the whole number part and the fractional part
@@ -57,13 +56,10 @@ const incrementTimestamp = (currentTimestamp) => {
 
 
 const getDocumentsByVideoId = async (video_id, object_name) => {
-    const db = getDb();
-    if (!db) throw new Error('Database connection is not initialized');
-
-    const documents = await db.collection('objects').find({
+    const documents = await db.objects.find({
         video_id,
         object_name, // Only fetch documents where object_name matches
-    }).toArray();
+    });
 
     return documents; // Returns an array of matching documents
 };
@@ -469,7 +465,7 @@ module.exports = {
             timestamp: { $gte: start_time, $lte: end_time },
             "relative_position.0": { $gte: x1, $lte: x2 }, // x-coordinate
             "relative_position.1": { $gte: y1, $lte: y2 }  // y-coordinate
-        }).toArray();
+        });
     },
     // query spatial objects async func handler
     // - logic to find objects at specified locations
