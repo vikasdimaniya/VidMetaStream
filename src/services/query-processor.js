@@ -54,7 +54,6 @@ module.exports = {
         const results = await db.collection('objects').find(query).toArray();
         return results;
     },
-
     queryVideos: async (object) => {
         const db = getDb();
         if (!db) {
@@ -80,42 +79,52 @@ module.exports = {
             for (const window of windows) {
                 const { startTime, endTime } = window;
 
+                // MongoDB query to find overlapping files
                 const matchingFiles = await db.collection('fs.files').find({
                     'metadata.videoID': video_id,
                     $and: [
-                        { 'metadata.startTimestamp': { $lt: endTime } },
-                        { 'metadata.endTimestamp': { $gt: startTime } },
-                    ],
+                        { 'metadata.startTimestamp': { $lt: endTime } }, // File starts before query ends
+                        { 'metadata.endTimestamp': { $gt: startTime } }  // File ends after query starts
+                    ]
                 }).toArray();
 
+                // Append matching files to results
                 results.push(...matchingFiles);
             }
         }
 
-        return results;
+        return results; // Return all matching files
     },
-
     getObjectData: async (objects) => {
         const db = getDb();
         if (!db) {
             throw new Error('Database not initialized');
         }
+        try {
+            // Log the query to debug
+            console.log("Querying objects with:", objects);
 
-        console.log("Querying objects with:", objects);
+            // Query the 'objects-decimal' model for specified object names
+            const results = await db.objects.find({ object_name: { $in: objects } });
 
-        const results = await db.collection('objects').find({
-            object_name: { $in: objects },
-        }).toArray();
+            // Log the raw results
+            console.log("Query results:", results);
 
-        const transformedResults = results.map((result) => ({
-            video_id: result.video_id,
-            object_name: result.object_name,
-            frames: result.frames || [],
-        }));
+            // Transform the results to the desired structure
+            const transformedResults = results.map((result) => ({
+                video_id: result.video_id,
+                object_name: result.object_name,
+                frames: result.frames || [], // Ensure frames are included, default to an empty array
+            }));
 
-        console.log("Transformed results:", transformedResults);
+            // Log the transformed results
+            console.log("Transformed results:", transformedResults);
 
-        return transformedResults;
+            return transformedResults;
+        } catch (error) {
+            console.error("Error in getObjectData:", error);
+            throw error; // Re-throw the error for higher-level handling
+        }
     },
 
     getInstanceData,

@@ -119,12 +119,13 @@ module.exports = {
      */
     queryVideos: async (req, reply) => {
         let objects = req.query.objects;
-        try{
+        let windowSize = req.query.window_size;
+        try {
             objects = JSON.parse(objects);
-        }catch(err){
-            return reply.send({error: "Invalid JSON"});
+        } catch (err) {
+            return reply.send({ error: "Invalid JSON" });
         }
-        let results = await queryProcessorUtils.queryObjects(objects);
+        let results = await queryProcessorUtils.queryObjects(objects, windowSize);
         return reply.send(results);
     },
     /**
@@ -137,15 +138,34 @@ module.exports = {
      * ]
      * 
      */
-    downloadVideoChunks: async (req, reply) => {
+    getVideoChunks: async (req, reply) => {
+        let response = [];
         let videos = req.body.videos;
-        for (let i = 0; i < videos.length; i++) {
-            let video = videos[i];
-            let videoId = video.video_id;
-            let startTime = video.start_time;
-            let endTime = video.end_time;
-            await queryProcessorUtils.downloadVideoChunk(videoId, startTime, endTime);
+        for (let video of videos) {
+            let result = await queryProcessorUtils.getVideoChunk(video.video_id, video.windows);
+            if (result) {
+                response.push(result);
+            }
         }
+        return reply.send(response);
+    },
+    downloadVideoChunk: async (req, reply) => {
+        const chunkId = req.params.chunk_id;
+
+        // Fetch the chunk metadata from GridFS
+        let file = await queryProcessorUtils.getChunk(chunkId);
+
+        // Set headers for downloading the file
+        reply.header('Content-Disposition', `attachment; filename="${path.basename(file.filename)}"`);
+        reply.type('application/octet-stream'); // Generic binary file type
+
+        console.log(`Starting streaming download for file: ${file.filename}`);
+
+        // Stream the file directly from GridFS to the client
+        const downloadStream = await queryProcessorUtils.downloadFileAsStream(file._id);
+
+        // Pipe the file stream into the response
+        return reply.send(downloadStream);
     },
     // query video funciton for spatial queries
     querySpatialObjects: async (req, reply) => {
@@ -192,6 +212,36 @@ module.exports = {
             return reply.code(500).send({ error: "Internal Server Error" });
         }
     },
+    /**
+     * Handles queries for sequences of objects appearing in order.
+     * @param {*} req 
+     * @param {*} reply 
+     * @returns List of video sections where the objects appear in the specified sequence.
+     */
+    querySequence: async (req, reply) => {
+        let sequence;
+        let windowSize = parseInt(req.query.window_size) || 0;
+
+        // Parse and validate the sequence
+        try {
+            sequence = JSON.parse(req.query.sequence);
+        } catch (err) {
+            return reply.code(400).send({ error: "Invalid JSON for sequence" });
+        }
+
+        if (!Array.isArray(sequence) || sequence.length < 2) {
+            return reply.code(400).send({ error: "Sequence must be an array of at least two object names" });
+        }
+
+        try {
+            // Pass to query processor utils
+            const result = await queryProcessorUtils.querySequence(sequence, windowSize);
+            return reply.send(result);
+        } catch (error) {
+            console.error("Error querying sequence of objects:", error);
+            return reply.code(500).send({ error: "Internal Server Error" });
+        }
+    },
     // Logical AND: query video function for spatial queries intersection
     querySpatialObjectsAnd: async (req, reply) => {
         let objects;
@@ -233,7 +283,7 @@ module.exports = {
         } catch (err) {
             return reply.send({ error: "Invalid query for object" });
         }
-    
+
         try {
             console.log("Fetching instances for:", object); // Add this log
             const result = await queryProcessorUtils.getInstanceData([object]);
@@ -251,7 +301,7 @@ module.exports = {
     queryInstanceOverlaps: async (req, reply) => {
         let object;
         let count;
-    
+
         // Parse and validate the object and count
         try {
             object = req.query.object; // Expecting an object type, e.g., "person"
@@ -264,17 +314,17 @@ module.exports = {
         } catch (err) {
             return reply.code(400).send({ error: "Invalid query parameters" });
         }
-    
+
         try {
             // Fetch all distinct instances of the object
             const instances = await queryProcessorUtils.getInstanceData([object]);
-    
+
             // Step 1: Find overlaps using findInstanceOverlaps
             const overlaps = queryProcessorUtils.findInstanceOverlaps(instances, count);
-    
+
             // Step 2: Merge overlaps using mergeOverlappingIntervals
             const mergedOverlaps = queryProcessorUtils.mergeOverlappingIntervals(overlaps);
-    
+
             // Return the final merged overlaps
             return reply.send({ [object]: mergedOverlaps });
         } catch (error) {

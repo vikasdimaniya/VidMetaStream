@@ -3,6 +3,7 @@ const queryService = require('../services/query-processor.js');
 const timeWindowsUtils = require('../utils/time-windows.js');
 const gridFSStorage = require('../services/chunk-storage.js');
 const fs = require('fs');
+const core = require('../../core.js');
 const path = require('path');
 const logFilePath = path.join(__dirname, 'timestamp_analysis.log');
 // Utility to log to a file
@@ -285,14 +286,13 @@ const queryInstanceOverlaps = async ({ object, count }) => {
 
 
 module.exports = {
-   
     //gets distinct instance object data from service
     getInstanceData: queryService.getInstanceData,
     queryInstanceOverlaps,
     findInstanceOverlaps,
     filterOverlapsForVideo,
     mergeOverlappingIntervals,
-    queryObjects: async (objects) => {
+    queryObjects: async (objects, windowSize) => {
         let results = {}; // Initialize results object to store merged windows by video_id
 
         // Query the first object to get the initial set of video results
@@ -531,7 +531,42 @@ module.exports = {
 
         return results;
     },
-}
+    /**
+      * Fetch the file metadata by chunk ID.
+      * @param {string} chunkId - The chunk's GridFS ID.
+      * @returns {Promise<Object>} - Metadata of the file.
+      */
+    getChunk: async (chunkId) => {
+        // Get the file metadata for the specified chunk ID
+        let file = await gridFSStorage.getChunk(core.getGridFSBucket(), chunkId);
+        return file;
+    },
+    downloadFileAsStream: async (fileId, destinationPath) => {
+        return await gridFSStorage.downloadFileAsStream(core.getGridFSBucket(), fileId, destinationPath);
+    },
+    /**
+     * Queries for video segments where objects appear in a specified sequence.
+     * @param {Array} sequence - An array of object names in the order they should appear.
+     * @param {number} windowSize - Minimum duration for the sequence.
+     * @returns {Promise<Array>} - An array of video sections with the sequence.
+     */
+    querySequence: async (sequence, windowSize) => {
+        const objectData = await queryService.getObjectData(sequence);
+
+        // Organize object data by video_id
+        console.log(objectData);
+        let objectIntervals = {};
+        for (let object in objects) {
+            if (!objectIntervals.hasOwnProperty(object.object_name)) {
+                objectIntervals[object.object_name] = [object.start_time];
+            } else {
+                objectIntervals[object.object_name].push(object.start_time);
+            }
+        }
+
+        
+    },
+};
 
 // Merge helper function for logical OR object spatial queries
 const mergeWindows = (windows) => {
@@ -626,7 +661,6 @@ const getCombinations = (array, size) => {
     return results;
     
 }
-
 // Helper function to check if a point is within a defined region
 const isWithinRegion = (point, region) => {
     const [x1, y1, x2, y2] = region;
