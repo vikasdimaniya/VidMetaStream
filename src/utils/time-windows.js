@@ -54,6 +54,7 @@ module.exports = {
 
         return mergedResults;
     },
+
     /**
      * Checks if a relative position is within a given region.
      * @param {Array} relativePosition - [x, y] coordinates (0 to 1).

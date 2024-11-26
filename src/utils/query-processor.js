@@ -471,13 +471,67 @@ module.exports = {
             "relative_position.1": { $gte: y1, $lte: y2 }  // y-coordinate
         }).toArray();
     },
-}    
+    // query spatial objects async func handler
+    // - logic to find objects at specified locations
+    // Logic to find objects at specified locations
+    querySpatialObjects: async ({ objects, area }) => {
+        const results = [];
 
-// Helper function to check if a point is within a defined region logical OR
-const isWithinRegion = (point, region) => {
-    const [x1, y1, x2, y2] = region;
-    return point[0] >= x1 && point[0] <= x2 && point[1] >= y1 && point[1] <= y2;
-};
+        // Fetch objects from the service
+        const objectData = await queryService.getObjectData(objects);
+
+        for (const obj of objectData) {
+            const { video_id, object_name, frames } = obj;
+
+            const validWindows = [];
+            let currentWindowStart = null;
+
+            for (const frame of frames) {
+                const [x, y] = frame.relative_position;
+
+                // Check if the relative position is within the specified area
+                if (isWithinRegion([x, y], area)) {
+                    if (currentWindowStart === null) {
+                        currentWindowStart = frame.timestamp; // Start a new window
+                    }
+                } else {
+                    // Close the current window if it exists
+                    if (currentWindowStart !== null) {
+                        validWindows.push({
+                            start_time: currentWindowStart,
+                            end_time: frame.timestamp,
+                        });
+                        currentWindowStart = null; // Reset the window
+                    }
+                }
+            }
+
+            // Add the last window if it was still open
+            if (currentWindowStart !== null) {
+                validWindows.push({
+                    start_time: currentWindowStart,
+                    end_time: frames[frames.length - 1].timestamp,
+                });
+            }
+
+            // Merge or refine windows if necessary
+            const mergedWindows = timeWindowsUtils.mergeWindows
+                ? timeWindowsUtils.mergeWindows(validWindows)
+                : validWindows;
+
+            // Only include results with valid windows
+            if (mergedWindows.length > 0) {
+                results.push({
+                    video_id,
+                    object_name,
+                    windows: mergedWindows,
+                });
+            }
+        }
+
+        return results;
+    },
+}
 
 // Merge helper function for logical OR object spatial queries
 const mergeWindows = (windows) => {
@@ -570,4 +624,12 @@ const getCombinations = (array, size) => {
     };
     combination(0, size, []);
     return results;
+    
+}
+
+// Helper function to check if a point is within a defined region
+const isWithinRegion = (point, region) => {
+    const [x1, y1, x2, y2] = region;
+    const [x, y] = point;
+    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
 };
