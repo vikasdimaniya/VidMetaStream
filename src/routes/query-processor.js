@@ -8,6 +8,9 @@ async function videoRoutes(app) {
     app.get('/query/spatialObjects', {
         handler: queryProcessorAPIs.querySpatialObjects
     });
+    app.get('/query/spatialObjectsTemporal', {
+        handler: queryProcessorAPIs.querySpatialObjectsTemporal
+    });
     app.get('/query/spatialObjectsAnd', {
         handler: queryProcessorAPIs.querySpatialObjectsAnd
     });

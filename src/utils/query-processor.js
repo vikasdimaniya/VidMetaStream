@@ -317,8 +317,36 @@ const getInstancesByObjectAndTime = async (object_name, time) => {
     return results;
 };
 
+/**
+ * Filters spatial results based on a temporal window.
+ * 
+ * @param {Array} spatialResults - Array of spatial results with object windows.
+ * @param {number} startTime - Start time of the temporal window.
+ * @param {number} endTime - End time of the temporal window.
+ * @returns {Array} - Filtered spatial results with windows adjusted to the temporal window.
+ */
+const filterByTimeWindow = async (spatialResults, startTime, endTime) => {
+    return spatialResults.map((entry) => {
+        const filteredWindows = entry.windows.filter((window) => {
+            const windowStart = parseFloat(window.start_time);
+            const windowEnd = parseFloat(window.end_time);
+            return windowStart < endTime && windowEnd > startTime;
+        }).map((window) => ({
+            start_time: Math.max(parseFloat(window.start_time), startTime).toFixed(3),
+            end_time: Math.min(parseFloat(window.end_time), endTime).toFixed(3),
+        }));
+
+        return {
+            ...entry,
+            windows: filteredWindows,
+        };
+    }).filter((entry) => entry.windows.length > 0); // Remove entries with no valid windows
+};
+
+
 
 module.exports = {
+    filterByTimeWindow,
     getInstancesByObjectAndTime,
     //gets distinct instance object data from service
     getInstanceData: queryService.getInstanceData,

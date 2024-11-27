@@ -154,8 +154,112 @@ const queryInstancesAtTime = async (req, reply) => {
     }
 };
 
+const querySpatialObjectsTemporal = async (req, reply) => {
+    let objects, area, startTime, endTime;
+
+    // Parse and validate `objects` parameter
+    try {
+        objects = JSON.parse(req.query.objects);
+        if (!Array.isArray(objects) || objects.length === 0) {
+            return reply.code(400).send({ error: "Invalid 'objects': must be a non-empty array" });
+        }
+    } catch (err) {
+        return reply.code(400).send({ error: "Invalid JSON for objects" });
+    }
+
+    // Parse and validate `area` parameter
+    try {
+        if (typeof req.query.area === "string") {
+            area = interpretRelativeArea(req.query.area);
+            if (!area) {
+                return reply.code(400).send({ error: `Invalid area description: ${req.query.area}` });
+            }
+        } else {
+            area = JSON.parse(req.query.area);
+            if (!Array.isArray(area) || area.length !== 4) {
+                return reply.code(400).send({ error: "Area must be an array with exactly 4 coordinates [x1, y1, x2, y2]" });
+            }
+        }
+    } catch (err) {
+        return reply.code(400).send({ error: "Invalid JSON for area" });
+    }
+
+    // Parse and validate `start_time` and `end_time` parameters
+    try {
+        startTime = parseFloat(req.query.start_time);
+        endTime = parseFloat(req.query.end_time);
+        if (isNaN(startTime) || isNaN(endTime) || startTime >= endTime) {
+            return reply.code(400).send({ error: "Invalid 'start_time' or 'end_time': must be valid numbers and start_time < end_time" });
+        }
+    } catch (err) {
+        return reply.code(400).send({ error: "Invalid query parameters for temporal filters" });
+    }
+
+    try {
+        // Step 1: Call the existing `querySpatialObjects` function
+        const spatialResults = await queryProcessorUtils.querySpatialObjects({ objects, area });
+
+        // Step 2: Apply temporal filtering
+        const temporalFilteredResults = spatialResults.map((entry) => {
+            const filteredWindows = entry.windows
+                .map((window) => {
+                    // Convert the window times to seconds for comparison
+                    const windowStart = convertTimeToSeconds(window.start_time);
+                    const windowEnd = convertTimeToSeconds(window.end_time);
+
+                    // Check for overlap with the temporal range
+                    if (windowStart < endTime && windowEnd > startTime) {
+                        return {
+                            start_time: secondsToTime(Math.max(windowStart, startTime)), // Trim start
+                            end_time: secondsToTime(Math.min(windowEnd, endTime)), // Trim end
+                        };
+                    }
+                    return null; // No overlap
+                })
+                .filter((window) => window !== null); // Remove non-overlapping windows
+
+            return {
+                ...entry,
+                windows: filteredWindows,
+            };
+        }).filter((entry) => entry.windows.length > 0); // Remove entries with no valid windows
+
+        // Step 3: Return the filtered results
+        return reply.send(temporalFilteredResults);
+    } catch (error) {
+        console.error("Error in querySpatialObjectsTemporal:", error);
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+};
+
+/**
+ * Converts a time string in HH:MM:SS.SSS format to seconds.
+ * @param {string} timeStr - Time string (e.g., "00:00:11.733").
+ * @returns {number} - Time in seconds.
+ */
+const convertTimeToSeconds = (timeStr) => {
+    const parts = timeStr.split(":");
+    const hours = parseFloat(parts[0]) * 3600;
+    const minutes = parseFloat(parts[1]) * 60;
+    const seconds = parseFloat(parts[2]);
+    return hours + minutes + seconds;
+};
+
+/**
+ * Converts a time in seconds to HH:MM:SS.SSS format.
+ * @param {number} seconds - Time in seconds.
+ * @returns {string} - Time string in HH:MM:SS.SSS format.
+ */
+const secondsToTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600).toString().padStart(2, "0");
+    const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
+    const secs = (seconds % 60).toFixed(3).padStart(6, "0");
+    return `${hours}:${minutes}:${secs}`;
+};
+
 
 module.exports = {
+    querySpatialObjectsTemporal,
     queryInstancesAtTime,
     /**
      * 
@@ -319,6 +423,8 @@ module.exports = {
             return reply.code(500).send({ error: "Internal Server Error" });
         }
     },
+
+
     // Gets distinct instances of classes 
     queryInstances: async (req, reply) => {
         let object;
