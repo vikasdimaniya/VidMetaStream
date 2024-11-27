@@ -390,11 +390,12 @@ module.exports = {
                 windows: results[videoId].windows,
             });
         }
-
         // remove videos whose windows are less than the window size
-        formattedResults = formattedResults.filter((result) => {
-            return result.windows.length >= windowSize;
-        });
+        if(windowSize) {
+            formattedResults = formattedResults.filter((result) => {
+                return result.windows.length >= windowSize;
+            });
+        }
         return formattedResults; // Return the formatted results
     },
     getVideoChunk: async (videoId, windows) => {
