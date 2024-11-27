@@ -283,12 +283,8 @@ const queryInstanceOverlaps = async ({ object, count }) => {
 const getInstancesByObjectAndTime = async (object_name, time) => {
     console.log(`getFramesByObjectAndTime called with object_name=${object_name} and time=${time.toFixed(3)} seconds`);
 
-    // Get the database connection
-    const db = getDb();
-    if (!db) throw new Error('Database connection is not initialized');
-
     // Fetch documents matching the object name
-    const documents = await db.collection('objects').find({ object_name }).toArray();
+    const documents = await db.objects.find({ object_name });
 
     if (!documents || documents.length === 0) {
         console.log(`No documents found for object_name=${object_name}`);
@@ -466,6 +462,7 @@ module.exports = {
     },    
     
     // Query objects by area inclusive logical AND, obj x AND obj y in area
+    //CHECK IF WORKING FOR MULTIPLE VIDEOS
     querySpatialObjectsAnd: async ({ objects, area }) => {
         // Step 1: Use the existing querySpatialObjects function to get all valid windows
         const allObjectsWindows = await module.exports.querySpatialObjects({ objects, area });
