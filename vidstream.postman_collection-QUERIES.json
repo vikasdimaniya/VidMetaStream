@@ -1,0 +1,391 @@
+{
+	"info": {
+		"_postman_id": "7ece1a22-4d90-4855-a7cc-eeffcaa8cb94",
+		"name": "vidstream",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "30666895"
+	},
+	"item": [
+		{
+			"name": "get video",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8000/video/673f9215248eb0fd00621e3e",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"video",
+						"673f9215248eb0fd00621e3e"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create video",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/video",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"video"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "query",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "spatialObjects",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "spatialObjectsTemporal",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "spatialObjectsAnd",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "queryDistinctInstances",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "queryInstanceOverlaps",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "queryInstanceOverlapsInArea",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "queryInstancesAtTime",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"doggy\",\n    \"description\": \"This is the first video\",\n    \"filename\": \"doggy.mov\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8000/query/objects?objects=[\"dog\",\"person\",\"truck\",\"sdd\"]",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"query",
+						"objects"
+					],
+					"query": [
+						{
+							"key": "objects",
+							"value": "[\"dog\",\"person\",\"truck\",\"sdd\"]"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "upload",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "movie",
+							"type": "file",
+							"src": "/Users/vikaskumar/Downloads/movie.mkv"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8000/upload",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8000",
+					"path": [
+						"upload"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
