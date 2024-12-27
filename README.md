@@ -67,28 +67,28 @@ Find objects within specific spatial regions:
 ```bash
 /query/spatialObjects?objects=["truck","handbag"]&area=left-half
 ```
-![Spatial Query Result](1.jpeg)
+![Spatial Query Result](images/1.jpeg)
 
 ### Spatial Objects AND Query
 Identify simultaneous presence of multiple objects in a specified area:
 ```bash
 /query/spatialObjectsAnd?objects=["person","truck","dog"]&area=left-half
 ```
-![AND Query Result](3.jpeg)
+![AND Query Result](images/3.jpeg)
 
 ### Temporal Queries
 Retrieve instances of objects at specific timestamps:
 ```bash
 /query/queryInstancesAtTime?object=person&time=2
 ```
-![Temporal Query Result](10.jpeg)
+![Temporal Query Result](images/10.jpeg)
 
 ### Instance Overlaps in Area
 Identify multiple instances of the same object class within a specific area:
 ```bash
 /query/queryInstanceOverlapsInArea?object=person&count=2&area=top-right
 ```
-![Instance Overlaps Result](8.jpeg)
+![Instance Overlaps Result](images/8.jpeg)
 
 ---
 
