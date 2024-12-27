@@ -3,7 +3,7 @@
 ## Overview
 This project presents a novel video querying system that addresses the challenges of processing and analyzing large-scale video datasets. Leveraging advanced object detection and metadata generation techniques, the system enables precise spatial-temporal queries and supports complex multi-object interactions, significantly enhancing workflows for machine learning and data analysis.
 
-![Architecture Diagram](architecture.png)
+![Architecture Diagram](images/architecture.png)
 
 ---
 
@@ -14,7 +14,7 @@ This project presents a novel video querying system that addresses the challenge
 - **Advanced Object Detection:** YOLOv11 with transformer-based enhancements for robust and accurate object detection.
 - **Chunk-Based Video Management:** Videos are divided into manageable 5-second chunks stored efficiently in MongoDB GridFS.
 
-![Metadata Schema for Video Querying System](metadata_schema.png)
+![Metadata Schema for Video Querying System](images/metadata_schema.png)
 
 ---
 
@@ -42,7 +42,7 @@ The system integrates video ingestion, object detection, metadata generation, an
 4. **Query Engine:** Users perform complex queries through a RESTful API.
 5. **Video Retrieval:** The system returns specific video chunks or frames matching the query.
 
-![Analysis Pipeline Program Flowchart](analyze.png)
+![Analysis Pipeline Program Flowchart](images/analyze.png)
 
 ---
 
@@ -151,7 +151,7 @@ Special thanks to:
 - MongoDB for providing scalable storage solutions.
 - FFmpeg for its reliable video processing tools.
 
-![Fragmenter Pipeline Program Flowchart](Fragmenter.png)
+![Fragmenter Pipeline Program Flowchart](images/Fragmenter.png)
 
 ---
 
