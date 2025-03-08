@@ -159,6 +159,6 @@ annotated_videos/*
 
 sample_videos
 sample_videos/*
-
+.venv/*
 output
 output/*
