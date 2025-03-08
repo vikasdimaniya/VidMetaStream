@@ -1,42 +1,80 @@
-# Advanced Video Querying System for Machine Learning
+# VidMetaStream
 
-An advanced video querying system designed for machine learning applications, enabling complex temporal and spatial searches within large video datasets. The system integrates state-of-the-art object detection and tracking technologies to efficiently filter and retrieve specific video segments required for AI model training.
+VidMetaStream is a sophisticated video processing and querying system that allows for complex analysis of video content based on object detection and temporal/spatial relationships.
 
-## Key Features:
+## Recent Improvements
 
-Precise Temporal & Spatial Queries: Search for moments within specific time intervals and spatial areas in videos.
-Complex Object Interaction Detection: Query based on object interactions (e.g., proximity or shared scenes).
-Efficient Data Filtering: Extracts exactly what’s needed for AI model training, optimizing resources.
+The codebase has undergone several improvements to enhance maintainability, performance, and developer experience:
 
-## Technologies:
+### 1. Code Organization
 
-TransVOD++ for object detection
-MongoDB for scalable metadata storage
-FFmpeg for video processing
-R-trees for efficient indexing
+- **Modular Architecture**: Refactored the monolithic query processor into smaller, more focused modules
+- **Separation of Concerns**: Moved utility functions to dedicated files based on their purpose
+- **Consistent Error Handling**: Implemented a centralized error handling mechanism with custom error classes
 
-## Future Work:
+### 2. New Features
 
-Integration of action recognition models
-Real-time video stream support
+- **Structured Logging**: Added a comprehensive logging system with different log levels and file output
+- **Input Validation**: Implemented robust input validation for API endpoints
+- **Configuration Management**: Centralized configuration in a single file with environment variable support
+
+### 3. Developer Experience
+
+- **Better Documentation**: Added JSDoc comments to functions and classes
+- **Code Consistency**: Standardized coding patterns across the codebase
+- **Environment Variables**: Added .env.example file to document required environment variables
+
+## Project Structure
+
+```
+src/
+├── api/              # API handlers
+├── db/               # Database connection and models
+├── model/            # Data models
+├── routes/           # API routes
+├── schema/           # API schemas
+├── services/         # External service integrations
+└── utils/            # Utility functions
+    ├── errors.js     # Custom error classes
+    ├── logger.js     # Logging utility
+    ├── spatial-utils.js # Spatial and time-related utilities
+    └── validation.js # Input validation utilities
+```
 
 ## Getting Started
 
-1. Install pip requirements: $pip install -r requirements.txt
-2. Create .env file with
+1. Clone the repository
+2. Copy `.env.example` to `.env` and update the values
+3. Install dependencies: `npm install`
+4. Start the server: `npm start`
 
-   To connect to mongoDB Atlas Cluster for metadata storage
-   a.MONGO_USERNAME = your_mongo_username
-   b. MONGO_PASSWORD = your_mongo_password
+## API Endpoints
 
-   To connect to aws s3 for video storage/retreival
-   c. AWS_ACCESS_KEY = your_aws_access_key
-   d. AWS_SECRET_ACCESS_KEY = your_aws_secret_access_key
+### Query Endpoints
 
-First run will download the yolo model
+- `GET /query/objects` - Query videos for objects
+- `GET /query/spatialObjects` - Query for objects in specific areas
+- `GET /query/spatialObjectsTemporal` - Query for objects in specific areas during a time range
+- `GET /query/spatialObjectsAnd` - Query for objects that satisfy multiple spatial conditions
+- `GET /query/queryDistinctInstances` - Query for distinct instances of objects
+- `GET /query/queryInstanceOverlaps` - Query for overlaps of the same object class
+- `GET /query/queryInstanceOverlapsInArea` - Query for overlaps of the same object class in a specific area
+- `GET /query/queryInstancesAtTime` - Query for instances of objects at a specific time
+- `GET /query/tempral/objects` - Query for sequences of objects appearing in order
 
-## TODO
+### Video Endpoints
 
-1. Create Query Engine for spatial and temporal, possible via metadata
-   - Base query of object via classes/labels in yolo model
-2. Create mechanism to retreive desired segments of videos from queries, based of sequences of frames that fit criteria
+- `POST /query/chunks` - Get video chunks based on time windows
+- `GET /query/chunk/download/:chunk_id` - Download a specific video chunk
+
+## Environment Variables
+
+See `.env.example` for a list of required environment variables.
+
+## Future Improvements
+
+- Add unit and integration tests
+- Implement caching for frequently accessed queries
+- Add authentication and authorization
+- Implement rate limiting
+- Add monitoring and alerting

@@ -1,203 +1,195 @@
 // src/api/query-processor
-const axios = require('axios'); // Assuming you use axios to make HTTP requests
-const queryProcessorUtils = require('../utils/query-processor.js');
 const path = require('path');
-const fs = require('fs');
+const queryProcessorUtils = require('../utils/query-processor.js');
+const { ApiError } = require('../utils/errors.js');
+const logger = require('../utils/logger.js');
+const { 
+    interpretRelativeArea, 
+    validateArea, 
+    convertTimeToSeconds, 
+    secondsToTime 
+} = require('../utils/spatial-utils.js');
 
-// Helper function to define relative regions for spatial queries
-const interpretRelativeArea = (region) => {
-    const regions = {
-        // Halves
-        "top-half": [0.0, 0.0, 1.0, 0.5],
-        "bottom-half": [0.0, 0.5, 1.0, 1.0],
-        "left-half": [0.0, 0.0, 0.5, 1.0],
-        "right-half": [0.5, 0.0, 1.0, 1.0],
-
-        // Thirds (horizontal)
-        "top-third": [0.0, 0.0, 1.0, 1 / 3],
-        "middle-third-horizontal": [0.0, 1 / 3, 1.0, 2 / 3],
-        "bottom-third": [0.0, 2 / 3, 1.0, 1.0],
-
-        // Thirds (vertical)
-        "left-third": [0.0, 0.0, 1 / 3, 1.0],
-        "middle-third-vertical": [1 / 3, 0.0, 2 / 3, 1.0],
-        "right-third": [2 / 3, 0.0, 1.0, 1.0],
-
-        // Quadrants
-        "top-left": [0.0, 0.0, 0.5, 0.5],
-        "top-right": [0.5, 0.0, 1.0, 0.5],
-        "bottom-left": [0.0, 0.5, 0.5, 1.0],
-        "bottom-right": [0.5, 0.5, 1.0, 1.0],
-    };
-
-    return regions[region] || null; // Return null if no match
-};
-
-// Validate area input
-const validateArea = (area) => {
-    if (typeof area === "string") {
-        return interpretRelativeArea(area);
-    }
+/**
+ * Query for instances of objects that overlap in a specific area
+ */
+async function queryInstanceOverlapsInArea(req, reply) {
     try {
-        area = JSON.parse(area);
-    } catch {
-        throw new Error("Invalid JSON for area");
-    }
-    if (!Array.isArray(area) || area.length !== 4 || area.some(coord => typeof coord !== "number")) {
-        throw new Error("Area must be an array with exactly 4 numerical coordinates");
-    }
-    return area;
-};
-
-const queryInstanceOverlapsInArea = async (req, reply) => {
-    let object, count, area;
-
-    try {
-        // Parse and validate query parameters
-        object = req.query.object;
-        count = parseInt(req.query.count, 10);
-        area = validateArea(req.query.area);
-
-        if (!object || typeof object !== "string" || isNaN(count) || count < 2 || !area) {
-            return reply.code(400).send({ error: "Invalid parameters" });
+        // Get validated parameters from request
+        const object = req.query.object;
+        const count = parseInt(req.query.count, 10);
+        const area = req.query.area;
+        
+        // Parse area if it's a JSON string
+        let parsedArea = area;
+        if (typeof area === 'string') {
+            if (area.startsWith('[')) {
+                parsedArea = JSON.parse(area);
+            } else {
+                // It's a named area, use the interpretRelativeArea function
+                parsedArea = interpretRelativeArea(area);
+                if (!parsedArea) {
+                    throw new ApiError(`Invalid area description: ${area}`, 400);
+                }
+            }
         }
 
-        console.log(`Parsed Query Parameters -> object: ${object}, count: ${count}, area: ${JSON.stringify(area)}`);
-    } catch (err) {
-        return reply.code(400).send({ error: "Invalid query parameters" });
-    }
+        logger.info(`Processing query for object overlaps in area`, { 
+            object, 
+            count, 
+            area: parsedArea 
+        });
 
-    try {
-        // Fetch overlaps from `queryInstanceOverlaps`
-        const overlapsResponse = await axios.get(
-            `http://localhost:8000/query/queryInstanceOverlaps?object=${object}&count=${count}`
-        );
-        const overlaps = overlapsResponse.data[object];
+        // Instead of making an HTTP call, directly call the function
+        // Create a mock request object with the required parameters
+        const mockReq = {
+            query: {
+                object,
+                count
+            }
+        };
+        
+        // Create a mock reply object to capture the response
+        const mockReply = {
+            code: () => mockReply,
+            send: (data) => data
+        };
+        
+        // Call the function directly
+        const overlapsResponse = await queryInstanceOverlaps(mockReq, mockReply);
+        const overlaps = overlapsResponse[object];
 
-        console.log(`Overlaps fetched:`, JSON.stringify(overlaps, null, 2));
+        logger.debug(`Overlaps fetched for ${object}`, { 
+            overlapsCount: overlaps.length 
+        });
 
         // Process each video
-        const allSuccessIntervals = [];
-        for (const video of overlaps) {
+        const allSuccessIntervals = await Promise.all(overlaps.map(async (video) => {
             const { video_id, merged_overlaps } = video;
 
-            console.log(`Calling filterOverlapsForVideo with video_id=${video_id}`);
+            logger.debug(`Processing video ${video_id} for overlaps`);
+            
             // Use queryProcessorUtils to call the function
             const successIntervals = await queryProcessorUtils.filterOverlapsForVideo(
                 video_id,
                 object,
                 merged_overlaps,
                 count,
-                area
+                parsedArea
             );
 
-            console.log(`Success intervals for video_id=${video_id}:`, JSON.stringify(successIntervals, null, 2));
+            logger.debug(`Found ${successIntervals.length} success intervals for video ${video_id}`);
 
-            allSuccessIntervals.push({
+            return {
                 video_id,
                 success_intervals: successIntervals,
-            });
-        }
+            };
+        }));
+
+        // Log the query result
+        logger.query('Instance overlaps in area query completed', {
+            object,
+            count,
+            area: parsedArea,
+            resultCount: allSuccessIntervals.reduce((sum, video) => sum + video.success_intervals.length, 0)
+        });
 
         // Send the success intervals as the response
         return reply.send({ success: true, data: allSuccessIntervals });
     } catch (error) {
-        console.error("Error querying overlaps in area:", error);
+        logger.error(`Error querying overlaps in area: ${error.message}`, { 
+            stack: error.stack 
+        });
+        
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
         return reply.code(500).send({ error: "Internal Server Error" });
     }
-};
+}
 
-const queryInstancesAtTime = async (req, reply) => {
-    let object, time;
-
+/**
+ * Query for instances of objects at a specific time
+ */
+async function queryInstancesAtTime(req, reply) {
     try {
-        // Parse and validate input parameters
-        object = req.query.object;
-        time = parseFloat(req.query.time);
+        // Get validated parameters from request
+        const object = req.query.object;
+        const time = parseFloat(req.query.time);
 
-        if (!object || typeof object !== "string") {
-            return reply.code(400).send({ error: "Invalid 'object': must be a non-empty string" });
-        }
+        logger.info(`Querying frames for object at specific time`, { 
+            object, 
+            time: time.toFixed(3) 
+        });
 
-        if (isNaN(time) || time < 0) {
-            return reply.code(400).send({ error: "Invalid 'time': must be a non-negative number" });
-        }
-
-        console.log(`Querying frames for object=${object} at time=${time.toFixed(3)} seconds`);
-    } catch (error) {
-        return reply.code(400).send({ error: "Invalid query parameters" });
-    }
-
-    try {
         // Use the utility function to fetch the matching frames
         const instances = await queryProcessorUtils.getInstancesByObjectAndTime(object, time);
 
+        // Log the query result
+        logger.query('Instances at time query completed', {
+            object,
+            time,
+            instancesFound: instances.length
+        });
+
         // Respond with results directly
-        if (instances.length > 0) {
-            console.log(`Found instances for object=${object} at time=${time.toFixed(3)} seconds`);
-            return reply.send({
-                object,
-                time,
-                instances,
-            });
-        } else {
-            console.log(`No instances found for object=${object} at time=${time.toFixed(3)} seconds`);
-            return reply.send({
-                object,
-                time,
-                instances: [],
-            });
-        }
+        return reply.send({
+            object,
+            time,
+            instances: instances || [],
+        });
     } catch (error) {
-        console.error("Error querying frames at time:", error);
+        logger.error(`Error querying frames at time: ${error.message}`, { 
+            stack: error.stack 
+        });
+        
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
         return reply.code(500).send({ error: "Internal Server Error" });
     }
-};
+}
 
-const querySpatialObjectsTemporal = async (req, reply) => {
-    let objects, area, startTime, endTime;
-
-    // Parse and validate `objects` parameter
+/**
+ * Query for objects in a specific area during a time range
+ */
+async function querySpatialObjectsTemporal(req, reply) {
     try {
-        objects = JSON.parse(req.query.objects);
-        if (!Array.isArray(objects) || objects.length === 0) {
-            return reply.code(400).send({ error: "Invalid 'objects': must be a non-empty array" });
+        // Get validated parameters from request
+        let objects = req.query.objects;
+        let area = req.query.area;
+        const startTime = parseFloat(req.query.start_time);
+        const endTime = parseFloat(req.query.end_time);
+
+        // Parse objects if it's a string
+        if (typeof objects === 'string') {
+            objects = JSON.parse(objects);
         }
-    } catch (err) {
-        return reply.code(400).send({ error: "Invalid JSON for objects" });
-    }
 
-    // Parse and validate `area` parameter
-    try {
-        if (typeof req.query.area === "string") {
-            area = interpretRelativeArea(req.query.area);
-            if (!area) {
-                return reply.code(400).send({ error: `Invalid area description: ${req.query.area}` });
+        // Parse area if it's a string
+        if (typeof area === 'string') {
+            if (area.startsWith('[')) {
+                area = JSON.parse(area);
+            } else {
+                // It's a named area, use the interpretRelativeArea function
+                area = interpretRelativeArea(area);
+                if (!area) {
+                    throw new ApiError(`Invalid area description: ${area}`, 400);
+                }
             }
-        } else {
-            area = JSON.parse(req.query.area);
-            if (!Array.isArray(area) || area.length !== 4) {
-                return reply.code(400).send({ error: "Area must be an array with exactly 4 coordinates [x1, y1, x2, y2]" });
-            }
         }
-    } catch (err) {
-        return reply.code(400).send({ error: "Invalid JSON for area" });
-    }
 
-    // Parse and validate `start_time` and `end_time` parameters
-    try {
-        startTime = parseFloat(req.query.start_time);
-        endTime = parseFloat(req.query.end_time);
-        if (isNaN(startTime) || isNaN(endTime) || startTime >= endTime) {
-            return reply.code(400).send({ error: "Invalid 'start_time' or 'end_time': must be valid numbers and start_time < end_time" });
-        }
-    } catch (err) {
-        return reply.code(400).send({ error: "Invalid query parameters for temporal filters" });
-    }
+        logger.info(`Processing spatial objects temporal query`, { 
+            objects, 
+            area, 
+            startTime, 
+            endTime 
+        });
 
-    try {
         // Step 1: Call the existing `querySpatialObjects` function
         const spatialResults = await queryProcessorUtils.querySpatialObjects({ objects, area });
+
+        logger.debug(`Spatial query returned ${spatialResults.length} results, applying temporal filter`);
 
         // Step 2: Apply temporal filtering
         const temporalFilteredResults = spatialResults.map((entry) => {
@@ -224,267 +216,429 @@ const querySpatialObjectsTemporal = async (req, reply) => {
             };
         }).filter((entry) => entry.windows.length > 0); // Remove entries with no valid windows
 
+        // Log the query result
+        logger.query('Spatial objects temporal query completed', {
+            objects,
+            area,
+            startTime,
+            endTime,
+            resultCount: temporalFilteredResults.length,
+            totalWindows: temporalFilteredResults.reduce((sum, entry) => sum + entry.windows.length, 0)
+        });
+
         // Step 3: Return the filtered results
         return reply.send(temporalFilteredResults);
     } catch (error) {
-        console.error("Error in querySpatialObjectsTemporal:", error);
+        logger.error(`Error in querySpatialObjectsTemporal: ${error.message}`, { 
+            stack: error.stack 
+        });
+        
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
         return reply.code(500).send({ error: "Internal Server Error" });
     }
-};
+}
 
 /**
- * Converts a time string in HH:MM:SS.SSS format to seconds.
- * @param {string} timeStr - Time string (e.g., "00:00:11.733").
- * @returns {number} - Time in seconds.
+ * Query videos for objects appearing together
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ * @returns {Array} - List of video sections where all the objects are seen together
  */
-const convertTimeToSeconds = (timeStr) => {
-    const parts = timeStr.split(":");
-    const hours = parseFloat(parts[0]) * 3600;
-    const minutes = parseFloat(parts[1]) * 60;
-    const seconds = parseFloat(parts[2]);
-    return hours + minutes + seconds;
-};
-
-/**
- * Converts a time in seconds to HH:MM:SS.SSS format.
- * @param {number} seconds - Time in seconds.
- * @returns {string} - Time string in HH:MM:SS.SSS format.
- */
-const secondsToTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600).toString().padStart(2, "0");
-    const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
-    const secs = (seconds % 60).toFixed(3).padStart(6, "0");
-    return `${hours}:${minutes}:${secs}`;
-};
-
-
-module.exports = {
-    querySpatialObjectsTemporal,
-    queryInstancesAtTime,
-    /**
-     * 
-     * @param {*} req 
-     * @param {*} reply 
-     * @returns list of video sections where all the objects are seen together 
-     * [{video_id:2, start_time: 0, end_time: 10}, {video_id:2, start_time: 15, end_time: 20}, {video_id:3, start_time: 0, end_time: 10}]
-     */
-    queryVideos: async (req, reply) => {
+async function queryVideos(req, reply) {
+    try {
+        // Get validated parameters from request
         let objects = req.query.objects;
-        let windowSize = req.query.window_size;
-        try {
+        const windowSize = req.query.window_size ? parseInt(req.query.window_size, 10) : undefined;
+
+        // Parse objects if it's a string
+        if (typeof objects === 'string') {
             objects = JSON.parse(objects);
-        } catch (err) {
-            return reply.send({ error: "Invalid JSON" });
         }
-        let results = await queryProcessorUtils.queryObjects(objects, windowSize);
+
+        logger.info(`Querying videos for objects appearing together`, {
+            objects,
+            windowSize
+        });
+
+        // Call the utility function to get results
+        const results = await queryProcessorUtils.queryObjects(objects, windowSize);
+
+        // Log the query result
+        logger.query('Video objects query completed', {
+            objects,
+            windowSize,
+            resultCount: results.length
+        });
+
         return reply.send(results);
-    },
-    /**
-     * 
-     * @param {*} req 
-     * @param {*} reply 
-     * 
-     * videos: [
-     *  {video_id: 1, timings:[{startTime:1, endtime:2},{startTime:5, endtime:20}]}
-     * ]
-     * 
-     */
-    getVideoChunks: async (req, reply) => {
-        let response = [];
-        let videos = req.body.videos;
-        for (let video of videos) {
-            let result = await queryProcessorUtils.getVideoChunk(video.video_id, video.windows);
-            if (result) {
-                response.push(result);
+    } catch (error) {
+        logger.error(`Error querying videos: ${error.message}`, {
+            stack: error.stack
+        });
+
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+}
+
+/**
+ * Query for objects in specific areas
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ */
+async function querySpatialObjects(req, reply) {
+    try {
+        // Get validated parameters from request
+        let objects = req.query.objects;
+        let area = req.query.area;
+
+        // Parse objects if it's a string
+        if (typeof objects === 'string') {
+            objects = JSON.parse(objects);
+        }
+
+        // Parse area if it's a string
+        if (typeof area === 'string') {
+            if (area.startsWith('[')) {
+                area = JSON.parse(area);
+            } else {
+                // It's a named area, use the interpretRelativeArea function
+                area = interpretRelativeArea(area);
+                if (!area) {
+                    throw new ApiError(`Invalid area description: ${area}`, 400);
+                }
             }
         }
-        return reply.send(response);
-    },
-    downloadVideoChunk: async (req, reply) => {
+
+        logger.info(`Querying spatial objects`, {
+            objects,
+            area
+        });
+
+        // Call the utility function to get results
+        const result = await queryProcessorUtils.querySpatialObjects({
+            objects,
+            area,
+        });
+
+        // Log the query result
+        logger.query('Spatial objects query completed', {
+            objects,
+            area,
+            resultCount: result.length
+        });
+
+        return reply.send(result);
+    } catch (error) {
+        logger.error(`Error querying spatial objects: ${error.message}`, {
+            stack: error.stack
+        });
+
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+}
+
+/**
+ * Query for objects that satisfy multiple spatial conditions (AND)
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ */
+async function querySpatialObjectsAnd(req, reply) {
+    try {
+        // Get validated parameters from request
+        let objects = req.query.objects;
+        let area = req.query.area;
+
+        // Parse objects if it's a string
+        if (typeof objects === 'string') {
+            objects = JSON.parse(objects);
+        }
+
+        // Parse area if it's a string
+        if (typeof area === 'string') {
+            if (area.startsWith('[')) {
+                area = JSON.parse(area);
+            } else {
+                // It's a named area, use the interpretRelativeArea function
+                area = interpretRelativeArea(area);
+                if (!area) {
+                    throw new ApiError(`Invalid area description: ${area}`, 400);
+                }
+            }
+        }
+
+        logger.info(`Querying spatial objects with AND logic`, {
+            objects,
+            area
+        });
+
+        // Call the utility function to get results
+        const result = await queryProcessorUtils.querySpatialObjectsAnd({ objects, area });
+
+        // Log the query result
+        logger.query('Spatial objects AND query completed', {
+            objects,
+            area,
+            resultCount: result.length
+        });
+
+        return reply.send(result);
+    } catch (error) {
+        logger.error(`Error querying spatial objects (AND): ${error.message}`, {
+            stack: error.stack
+        });
+
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+}
+
+/**
+ * Query for distinct instances of objects
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ */
+async function queryInstances(req, reply) {
+    try {
+        // Get validated parameters from request
+        const object = req.query.object;
+
+        logger.info(`Querying distinct instances for object`, {
+            object
+        });
+
+        // Call the utility function to get results
+        const result = await queryProcessorUtils.getInstanceData([object]);
+
+        // Check if any instances were found
+        if (result.length === 0) {
+            logger.warn(`No instances found for object: ${object}`);
+            return reply.code(404).send({ error: `No instances found for object: ${object}` });
+        }
+
+        // Log the query result
+        logger.query('Distinct instances query completed', {
+            object,
+            instanceCount: result.length
+        });
+
+        return reply.send({ [object]: result });
+    } catch (error) {
+        logger.error(`Error querying instances: ${error.message}`, {
+            stack: error.stack
+        });
+
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+}
+
+/**
+ * Query for overlaps of the same object class
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ */
+async function queryInstanceOverlaps(req, reply) {
+    try {
+        // Get validated parameters from request
+        const object = req.query.object;
+        const count = parseInt(req.query.count, 10);
+
+        logger.info(`Querying instance overlaps for object`, {
+            object,
+            count
+        });
+
+        // Fetch all distinct instances of the object
+        const instances = await queryProcessorUtils.getInstanceData([object]);
+
+        logger.debug(`Found ${instances.length} instances for object: ${object}`);
+
+        // Step 1: Find overlaps using findInstanceOverlaps
+        const overlaps = queryProcessorUtils.findInstanceOverlaps(instances, count);
+
+        // Step 2: Merge overlaps using mergeOverlappingIntervals
+        const mergedOverlaps = queryProcessorUtils.mergeOverlappingIntervals(overlaps);
+
+        // Log the query result
+        logger.query('Instance overlaps query completed', {
+            object,
+            count,
+            overlapsCount: overlaps.length,
+            mergedOverlapsCount: mergedOverlaps.length
+        });
+
+        // Return the final merged overlaps
+        return reply.send({ [object]: mergedOverlaps });
+    } catch (error) {
+        logger.error(`Error querying instance overlaps: ${error.message}`, {
+            stack: error.stack
+        });
+
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+}
+
+/**
+ * Get video chunks based on time windows
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ */
+async function getVideoChunks(req, reply) {
+    try {
+        // Get validated parameters from request
+        const videos = req.body.videos;
+
+        logger.info(`Processing request for video chunks`, {
+            videoCount: videos.length
+        });
+
+        // Process each video to get chunks
+        const response = await Promise.all(videos.map(async (video) => {
+            logger.debug(`Getting chunks for video: ${video.video_id}`);
+            const result = await queryProcessorUtils.getVideoChunk(video.video_id, video.windows);
+            return result || null;
+        }));
+
+        // Filter out null results
+        const filteredResponse = response.filter(result => result !== null);
+
+        // Log the query result
+        logger.query('Video chunks query completed', {
+            requestedVideos: videos.length,
+            successfulChunks: filteredResponse.length
+        });
+
+        return reply.send(filteredResponse);
+    } catch (error) {
+        logger.error(`Error getting video chunks: ${error.message}`, {
+            stack: error.stack
+        });
+
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+}
+
+/**
+ * Download a specific video chunk
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ */
+async function downloadVideoChunk(req, reply) {
+    try {
+        // Get validated parameters from request
         const chunkId = req.params.chunk_id;
 
+        logger.info(`Processing request to download chunk: ${chunkId}`);
+
         // Fetch the chunk metadata from GridFS
-        let file = await queryProcessorUtils.getChunk(chunkId);
+        const file = await queryProcessorUtils.getChunk(chunkId);
+        if (!file) {
+            throw new ApiError(`Chunk not found: ${chunkId}`, 404);
+        }
 
         // Set headers for downloading the file
         reply.header('Content-Disposition', `attachment; filename="${path.basename(file.filename)}"`);
         reply.type('application/octet-stream'); // Generic binary file type
 
-        console.log(`Starting streaming download for file: ${file.filename}`);
+        logger.debug(`Starting streaming download for file: ${file.filename}`);
 
         // Stream the file directly from GridFS to the client
         const downloadStream = await queryProcessorUtils.downloadFileAsStream(file._id);
 
+        // Log the download
+        logger.query('Video chunk download initiated', {
+            chunkId,
+            filename: file.filename,
+            fileSize: file.length
+        });
+
         // Pipe the file stream into the response
         return reply.send(downloadStream);
-    },
-    // query video funciton for spatial queries
-    querySpatialObjects: async (req, reply) => {
-        let objects;
-        let area;
+    } catch (error) {
+        logger.error(`Error downloading video chunk: ${error.message}`, {
+            stack: error.stack
+        });
 
-        // Parse and validate objects
-        try {
-            objects = JSON.parse(req.query.objects);
-        } catch (err) {
-            return reply.send({ error: "Invalid JSON for objects" });
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
         }
-
-        // Determine the area
-        if (typeof req.query.area === "string") {
-            area = interpretRelativeArea(req.query.area); // Handle shorthand
-            if (!area) {
-                return reply.code(400).send({ error: `Invalid area description: ${req.query.area}` });
-            }
-        } else {
-            try {
-                area = JSON.parse(req.query.area); // Handle explicit bounding box
-            } catch (err) {
-                return reply.send({ error: "Invalid JSON for area" });
-            }
-        }
-
-        // Validate bounding box format
-        if (!area || !Array.isArray(area) || area.length !== 4) {
-            return reply.code(400).send({ error: "Area must be an array with exactly 4 coordinates [x1, y1, x2, y2]" });
-        }
-
-        try {
-            // Pass to query processor utils
-            const result = await queryProcessorUtils.querySpatialObjects({
-                objects,
-                area,
-            });
-
-            // Return the results
-            return reply.send(result);
-        } catch (error) {
-            console.error("Error querying spatial objects:", error);
-            return reply.code(500).send({ error: "Internal Server Error" });
-        }
-    },
-    /**
-     * Handles queries for sequences of objects appearing in order.
-     * @param {*} req 
-     * @param {*} reply 
-     * @returns List of video sections where the objects appear in the specified sequence.
-     */
-    querySequence: async (req, reply) => {
-        let sequence;
-        let windowSize = parseInt(req.query.window_size) || 0;
-
-        // Parse and validate the sequence
-        try {
-            sequence = JSON.parse(req.query.sequence);
-        } catch (err) {
-            return reply.code(400).send({ error: "Invalid JSON for sequence" });
-        }
-
-        if (!Array.isArray(sequence) || sequence.length < 2) {
-            return reply.code(400).send({ error: "Sequence must be an array of at least two object names" });
-        }
-
-        try {
-            // Pass to query processor utils
-            const result = await queryProcessorUtils.querySequence(sequence, windowSize);
-            return reply.send(result);
-        } catch (error) {
-            console.error("Error querying sequence of objects:", error);
-            return reply.code(500).send({ error: "Internal Server Error" });
-        }
-    },
-    // Logical AND: query video function for spatial queries intersection
-    querySpatialObjectsAnd: async (req, reply) => {
-        let objects;
-        let area;
-
-        // Parse and validate objects
-        try {
-            objects = JSON.parse(req.query.objects);
-            if (!objects || !Array.isArray(objects) || objects.length === 0) {
-                return reply.code(400).send({ error: "Invalid 'objects': must be a non-empty array" });
-            }
-        } catch (err) {
-            return reply.send({ error: "Invalid JSON for objects" });
-        }
-
-        // Parse and validate area
-        try {
-            area = validateArea(req.query.area);
-        } catch (err) {
-            return reply.code(400).send({ error: err.message });
-        }
-
-        try {
-            const result = await queryProcessorUtils.querySpatialObjectsAnd({ objects, area });
-            return reply.send(result);
-        } catch (error) {
-            console.error("Error querying spatial objects (AND):", error);
-            return reply.code(500).send({ error: "Internal Server Error" });
-        }
-    },
-
-
-    // Gets distinct instances of classes 
-    queryInstances: async (req, reply) => {
-        let object;
-        try {
-            object = req.query.object; // Expecting a single object as a string, e.g., "person"
-            if (!object || typeof object !== "string") {
-                return reply.code(400).send({ error: "Invalid 'object': must be a non-empty string" });
-            }
-        } catch (err) {
-            return reply.send({ error: "Invalid query for object" });
-        }
-
-        try {
-            console.log("Fetching instances for:", object); // Add this log
-            const result = await queryProcessorUtils.getInstanceData([object]);
-            if (result.length === 0) {
-                return reply.code(404).send({ error: `No instances found for object: ${object}` });
-            }
-            return reply.send({ [object]: result });
-        } catch (error) {
-            console.error("Error querying instances:", error);
-            return reply.code(500).send({ error: "Internal Server Error" });
-        }
-    },
-
-
-    queryInstanceOverlaps: async (req, reply) => {
-        let object;
-        let count;
-
-        // Parse and validate the object and count
-        try {
-            object = req.query.object; // Expecting an object type, e.g., "person"
-            count = parseInt(req.query.count, 10); // Number of instances to compare for overlap
-            if (!object || typeof object !== "string" || isNaN(count) || count < 2) {
-                return reply.code(400).send({
-                    error: "Invalid 'object' or 'count': must be a string and a number >= 2",
-                });
-            }
-        } catch (err) {
-            return reply.code(400).send({ error: "Invalid query parameters" });
-        }
-
-        try {
-            // Fetch all distinct instances of the object
-            const instances = await queryProcessorUtils.getInstanceData([object]);
-
-            // Step 1: Find overlaps using findInstanceOverlaps
-            const overlaps = queryProcessorUtils.findInstanceOverlaps(instances, count);
-
-            // Step 2: Merge overlaps using mergeOverlappingIntervals
-            const mergedOverlaps = queryProcessorUtils.mergeOverlappingIntervals(overlaps);
-
-            // Return the final merged overlaps
-            return reply.send({ [object]: mergedOverlaps });
-        } catch (error) {
-            console.error("Error querying instance overlaps:", error);
-            return reply.code(500).send({ error: "Internal Server Error" });
-        }
-    },
-
-    queryInstanceOverlapsInArea
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
 }
+
+/**
+ * Query for sequences of objects appearing in order
+ * @param {Object} req - Request object
+ * @param {Object} reply - Reply object
+ */
+async function querySequence(req, reply) {
+    try {
+        // Get validated parameters from request
+        let sequence = req.query.sequence;
+        const windowSize = req.query.window_size ? parseInt(req.query.window_size, 10) : 0;
+
+        // Parse sequence if it's a string
+        if (typeof sequence === 'string') {
+            sequence = JSON.parse(sequence);
+        }
+
+        logger.info(`Querying for object sequences`, {
+            sequence,
+            windowSize
+        });
+
+        // Call the utility function to get results
+        const result = await queryProcessorUtils.querySequence(sequence, windowSize);
+
+        // Log the query result
+        logger.query('Sequence query completed', {
+            sequence,
+            windowSize,
+            resultCount: result.length
+        });
+
+        return reply.send(result);
+    } catch (error) {
+        logger.error(`Error querying sequence of objects: ${error.message}`, {
+            stack: error.stack
+        });
+
+        if (error instanceof ApiError) {
+            return reply.code(error.statusCode).send({ error: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error" });
+    }
+}
+
+// Export all query handlers
+module.exports = {
+    queryInstanceOverlapsInArea,
+    queryInstancesAtTime,
+    querySpatialObjectsTemporal,
+    queryVideos,
+    querySpatialObjects,
+    querySpatialObjectsAnd,
+    queryInstances,
+    queryInstanceOverlaps,
+    getVideoChunks,
+    downloadVideoChunk,
+    querySequence
+};
