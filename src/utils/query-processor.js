@@ -178,47 +178,104 @@ const isPositionInArea = (relativePosition, area) => {
     return x >= x1 && x <= x2 && y >= y1 && y <= y2;
 };
 
-
+/**
+ * Find overlaps between instances of the same object
+ * @param {Array} instances - Array of instances
+ * @param {number} count - Minimum number of instances that must overlap
+ * @returns {Array} - Array of overlaps
+ */
 const findInstanceOverlaps = (instances, count) => {
-    const overlaps = [];
-
-    // Group instances by video_id
-    const instancesByVideo = instances.reduce((acc, instance) => {
-        acc[instance.video_id] = acc[instance.video_id] || [];
-        acc[instance.video_id].push(instance);
-        return acc;
-    }, {});
-
-    // For each video, find overlaps
-    for (const [video_id, videoInstances] of Object.entries(instancesByVideo)) {
-        const overlappingWindows = [];
-
-        // Generate combinations of instances based on the count
-        const combinations = getCombinations(videoInstances, count);
-
-        // Check overlaps for each combination
-        combinations.forEach((combo) => {
-            const overlapStart = Math.max(...combo.map((inst) => inst.start_time));
-            const overlapEnd = Math.min(...combo.map((inst) => inst.end_time));
-
-            if (overlapStart < overlapEnd) {
-                overlappingWindows.push({
-                    start_time: overlapStart,
-                    end_time: overlapEnd,
-                    instances: combo.map((inst) => inst._id),
-                });
-            }
+    // Optimization: Use a sweep line algorithm for O(n log n) complexity
+    // instead of the previous O(n²) approach with nested loops
+    
+    // Create events for start and end of each instance
+    const events = [];
+    
+    instances.forEach(instance => {
+        // Convert time strings to numbers if needed
+        const startTime = typeof instance.start_time === 'string' 
+            ? convertTimeToSeconds(instance.start_time) 
+            : instance.start_time;
+            
+        const endTime = typeof instance.end_time === 'string'
+            ? convertTimeToSeconds(instance.end_time)
+            : instance.end_time;
+            
+        events.push({
+            time: startTime,
+            type: 'start',
+            instance
         });
-
-        if (overlappingWindows.length > 0) {
-            overlaps.push({
-                video_id,
-                overlaps: overlappingWindows,
-            });
+        
+        events.push({
+            time: endTime,
+            type: 'end',
+            instance
+        });
+    });
+    
+    // Sort events by time
+    events.sort((a, b) => {
+        // If times are equal, process end events before start events
+        if (a.time === b.time) {
+            return a.type === 'end' ? -1 : 1;
+        }
+        return a.time - b.time;
+    });
+    
+    // Sweep through events
+    const activeInstances = new Set();
+    const overlaps = [];
+    let currentOverlap = null;
+    
+    for (const event of events) {
+        if (event.type === 'start') {
+            // Add instance to active set
+            activeInstances.add(event.instance);
+            
+            // Check if we have enough active instances
+            if (activeInstances.size >= count && !currentOverlap) {
+                // Start a new overlap
+                currentOverlap = {
+                    start_time: event.time,
+                    instances: Array.from(activeInstances),
+                    video_id: event.instance.video_id
+                };
+            }
+        } else {
+            // Remove instance from active set
+            activeInstances.delete(event.instance);
+            
+            // Check if we drop below the required count
+            if (activeInstances.size < count && currentOverlap) {
+                // End the current overlap
+                currentOverlap.end_time = event.time;
+                overlaps.push(currentOverlap);
+                currentOverlap = null;
+            }
         }
     }
-
-    return overlaps;
+    
+    // Group overlaps by video_id
+    const overlapsByVideo = {};
+    
+    for (const overlap of overlaps) {
+        const videoId = overlap.video_id;
+        
+        if (!overlapsByVideo[videoId]) {
+            overlapsByVideo[videoId] = {
+                video_id: videoId,
+                overlaps: []
+            };
+        }
+        
+        // Remove video_id from the overlap object
+        const { video_id, ...overlapWithoutVideoId } = overlap;
+        
+        overlapsByVideo[videoId].overlaps.push(overlapWithoutVideoId);
+    }
+    
+    return Object.values(overlapsByVideo);
 };
 
 //merge overlaps from instances of overlaps to conious start and end of overlaps
@@ -343,85 +400,142 @@ const filterByTimeWindow = async (spatialResults, startTime, endTime) => {
     }).filter((entry) => entry.windows.length > 0); // Remove entries with no valid windows
 };
 
+/**
+ * Count the number of spatial objects matching the query
+ * @param {Object} params - Query parameters
+ * @param {Array} params.objects - Array of object names
+ * @param {Array|string} params.area - Area as [x1, y1, x2, y2] or named area
+ * @returns {Promise<number>} - Number of matching objects
+ */
+const countSpatialObjects = async ({ objects, area }) => {
+    // Parse area if it's a string
+    if (typeof area === 'string') {
+        if (area.startsWith('[')) {
+            area = JSON.parse(area);
+        } else {
+            // It's a named area, use the interpretRelativeArea function
+            area = interpretRelativeArea(area);
+            if (!area) {
+                throw new Error(`Invalid area description: ${area}`);
+            }
+        }
+    }
+    
+    // Create query for MongoDB
+    const query = {
+        object_name: { $in: objects },
+        'frames.relative_position': {
+            $elemMatch: {
+                $and: [
+                    { $gte: area[0] }, // x >= x1
+                    { $lte: area[2] }, // x <= x2
+                    { $gte: area[1] }, // y >= y1
+                    { $lte: area[3] }  // y <= y2
+                ]
+            }
+        }
+    };
+    
+    // Count documents
+    const count = await db.objects.countDocuments(query);
+    
+    return count;
+};
 
+/**
+ * Query for spatial objects with pagination
+ * @param {Object} params - Query parameters
+ * @param {Array} params.objects - Array of object names
+ * @param {Array|string} params.area - Area as [x1, y1, x2, y2] or named area
+ * @param {number} skip - Number of documents to skip
+ * @param {number} limit - Maximum number of documents to return
+ * @returns {Promise<Array>} - Array of matching objects
+ */
+const querySpatialObjectsWithPagination = async ({ objects, area }, skip, limit) => {
+    // Parse area if it's a string
+    if (typeof area === 'string') {
+        if (area.startsWith('[')) {
+            area = JSON.parse(area);
+        } else {
+            // It's a named area, use the interpretRelativeArea function
+            area = interpretRelativeArea(area);
+            if (!area) {
+                throw new Error(`Invalid area description: ${area}`);
+            }
+        }
+    }
+    
+    // Use the spatial index if available
+    const spatialIndex = require('./spatial-index').SpatialIndex;
+    const index = new spatialIndex();
+    
+    // Get all objects for the specified object types
+    const allObjects = await db.objects.find({
+        object_name: { $in: objects }
+    }).toArray();
+    
+    // Build the spatial index
+    index.buildFromObjects(allObjects);
+    
+    // Query the spatial index for objects in the specified area
+    const results = [];
+    
+    for (const objectName of objects) {
+        const objectsOfType = allObjects.filter(obj => obj.object_name === objectName);
+        
+        for (const obj of objectsOfType) {
+            const objectId = obj._id.toString();
+            const videoId = obj.video_id;
+            
+            // Check if this object is in the specified area
+            const matchingIds = index.query(videoId, area);
+            
+            if (matchingIds.includes(objectId)) {
+                results.push(obj);
+            }
+        }
+    }
+    
+    // Apply pagination
+    return results.slice(skip, skip + limit);
+};
+
+/**
+ * Get a MongoDB cursor for a query
+ * @param {Object} params - Query parameters
+ * @param {Array} params.objects - Array of object names
+ * @returns {Promise<Object>} - MongoDB cursor
+ */
+const getQueryCursor = async ({ objects }) => {
+    // Create query for MongoDB
+    const query = {
+        object_name: { $in: objects }
+    };
+    
+    // Create cursor
+    const cursor = db.objects.find(query);
+    
+    return cursor;
+};
 
 module.exports = {
-    filterByTimeWindow,
+    getDocumentsByVideoId,
+    filterOverlapsForVideo,
+    isPositionInArea,
+    findInstanceOverlaps,
+    mergeOverlappingIntervals,
+    queryInstanceOverlaps,
     getInstancesByObjectAndTime,
+    filterByTimeWindow,
+    mergeWindows,
+    intersectWindows,
+    getCombinations,
+    isWithinRegion,
+    countSpatialObjects,
+    querySpatialObjectsWithPagination,
+    getQueryCursor,
     //gets distinct instance object data from service
     getInstanceData: queryService.getInstanceData,
-    queryInstanceOverlaps,
-    findInstanceOverlaps,
-    filterOverlapsForVideo,
-    mergeOverlappingIntervals,
-    queryObjects: async (objects, windowSize) => {
-        let results = {}; // Initialize results object to store merged windows by video_id
-
-        // Query the first object to get the initial set of video results
-        let initialObjectResults = await queryService.queryVideos(objects[0]);
-
-        // Iterate over each result from the first query
-        for (let videoResult of initialObjectResults) {
-            let initialWindow = timeWindowsUtils.getTimings(videoResult); // Get timings for the current result
-            let activeWindows = [initialWindow]; // Initialize active windows for the first object
-
-            // Process the remaining objects
-            for (let objectIndex = 1; objectIndex < objects.length; objectIndex++) {
-                let nextObjectWindows = []; // Store results for the current object
-
-                // Check for overlapping windows in the current time frame
-                for (let activeWindow of activeWindows) {
-                    // Query for overlapping windows within the current time window
-                    let overlappingWindows = await queryService.queryVideosWithInSpecificTime(
-                        videoResult.video_id,
-                        objects[objectIndex],
-                        activeWindow.startTime,
-                        activeWindow.endTime
-                    );
-
-                    // Iterate over the overlapping windows and calculate new windows
-                    for (let overlapWindow of overlappingWindows) {
-                        let currentWindow = timeWindowsUtils.getTimings(overlapWindow); // Get timings for the current result
-                        let calculatedWindow = timeWindowsUtils.calculateOverlapingTimings(currentWindow, activeWindow); // Calculate overlapping time windows
-                        nextObjectWindows.push(calculatedWindow); // Add the new window to the results
-                    }
-                }
-
-                // Update active windows for the next iteration
-                activeWindows = nextObjectWindows;
-            }
-
-            // If valid windows are found, add them to the results object
-            if (activeWindows.length > 0) {
-                if (results.hasOwnProperty(videoResult.video_id)) {
-                    // Append new windows to existing windows for this video_id
-                    results[videoResult.video_id].windows = [...results[videoResult.video_id].windows, ...activeWindows];
-                } else {
-                    // Initialize windows for this video_id
-                    results[videoResult.video_id] = { windows: activeWindows };
-                }
-            }
-        }
-
-        // Merge overlapping or contiguous windows for all video IDs
-        results = timeWindowsUtils.mergeTimeWindows(results);
-
-        // Format results into an array of objects with video_id and corresponding windows
-        let formattedResults = [];
-        for (let videoId of Object.keys(results)) {
-            formattedResults.push({
-                video_id: videoId,
-                windows: results[videoId].windows,
-            });
-        }
-        // remove videos whose windows are less than the window size
-        if(windowSize) {
-            formattedResults = formattedResults.filter((result) => {
-                return result.windows.length >= windowSize;
-            });
-        }
-        return formattedResults; // Return the formatted results
-    },
     getVideoChunk: async (videoId, windows) => {
         // Get matching files metadata for the specified time window
         let files = await gridFSStorage.getVideoFilesForTimeWindows(core.getGridFSBucket(), videoId, windows);
