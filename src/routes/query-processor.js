@@ -56,28 +56,8 @@ async function videoRoutes(app) {
                 type: 'object',
                 required: ['objects'],
                 properties: {
-                    objects: { 
-                        oneOf: [
-                            { 
-                                type: 'array', 
-                                minItems: 1,
-                                items: { type: 'string' }
-                            },
-                            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-                        ]
-                    },
-                    area: { 
-                        oneOf: [
-                            { type: 'string' }, // For named areas like "top-half"
-                            { 
-                                type: 'array', 
-                                minItems: 4, 
-                                maxItems: 4,
-                                items: { type: 'number' }
-                            },
-                            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-                        ]
-                    },
+                    objects: { type: 'string' },
+                    area: { type: 'string' },
                     page: { type: 'integer', minimum: 1 },
                     limit: { type: 'integer', minimum: 1, maximum: 100 }
                 }
@@ -107,16 +87,7 @@ async function videoRoutes(app) {
                 type: 'object',
                 required: ['objects'],
                 properties: {
-                    objects: { 
-                        oneOf: [
-                            { 
-                                type: 'array', 
-                                minItems: 1,
-                                items: { type: 'string' }
-                            },
-                            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-                        ]
-                    }
+                    objects: { type: 'string' }
                 }
             }
         },
@@ -181,6 +152,19 @@ async function videoRoutes(app) {
     app.get('/query/tempral/objects', {
         ...querySchemas.querySequenceSchema,
         handler: queryProcessorAPIs.querySequence
+    });
+
+    // Test endpoint for debugging
+    app.get('/query/test', (req, reply) => {
+        const objects = req.query.objects;
+        const area = req.query.area;
+        
+        return reply.send({
+            objectsType: typeof objects,
+            objectsValue: objects,
+            areaType: typeof area,
+            areaValue: area
+        });
     });
 }
 

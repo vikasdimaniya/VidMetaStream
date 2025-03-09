@@ -15,43 +15,31 @@ const logToFile = (message) => {
 // Import getInstanceData directly from queryService
 const getInstanceData = queryService.getInstanceData;
 
+/**
+ * Increment a timestamp by a small amount
+ * @param {number} currentTimestamp - The current timestamp in seconds
+ * @returns {number} - The incremented timestamp
+ */
 const incrementTimestamp = (currentTimestamp) => {
-    // Extract the whole number part and the fractional part
+    // Extract the whole part and the fractional part
     const wholePart = Math.floor(currentTimestamp);
-    let fractionalPart = parseFloat((currentTimestamp % 1).toFixed(3)); // e.g., 0.366
-
-    // Convert fractional part to milliseconds for easier manipulation
-    let milliseconds = Math.round(fractionalPart * 1000); // e.g., 366
-
-    // Determine the last digit of the milliseconds
-    const lastDigit = milliseconds % 10;
-
-    // Define increment based on the last digit
-    let increment;
-    if (lastDigit === 0) {
-        increment = 33; // from 0 to 3
-    } else if (lastDigit === 3) {
-        increment = 33; // from 3 to 6
-    } else if (lastDigit === 6) {
-        increment = 34; // from 6 to next second (0)
-    } else {
-        throw new Error(`Unexpected millisecond ending: ${milliseconds}`);
-    }
-
+    let milliseconds = Math.round((currentTimestamp - wholePart) * 1000);
+    
+    // Add a small increment (33ms, approximately 1/30th of a second)
+    // This is a common frame rate in videos
+    const increment = 33;
+    
     // Calculate the new milliseconds
     milliseconds += increment;
-
+    
     // Handle overflow if milliseconds reach or exceed 1000
     if (milliseconds >= 1000) {
         milliseconds -= 1000;
         return wholePart + 1 + (milliseconds / 1000);
     }
-
-    // Normalize to three decimal places
-    const newFractionalPart = parseFloat((milliseconds / 1000).toFixed(3));
-
-    // Combine the whole part with the new fractional part
-    return wholePart + newFractionalPart;
+    
+    // Return the new timestamp
+    return wholePart + (milliseconds / 1000);
 };
 
 
@@ -829,48 +817,186 @@ module.exports = {
      * @returns {Promise<Array>} - An array of video sections with the sequence.
      */
     querySequence: async (sequence, windowSize) => {
-        const objectData = await queryService.getObjectData(sequence);
-        console.log("objectData:", objectData);
-
-        // Organize object data by video_id
-        let videoObjectIntervals = {};
-        
-        // Group objects by video_id first
-        for (let object of objectData) {
-            const videoId = object.video_id;
-            if (!videoObjectIntervals[videoId]) {
-                videoObjectIntervals[videoId] = {};
+        try {
+            // Get data for all objects in the sequence
+            const objectData = await queryService.getObjectData(sequence);
+            
+            if (!objectData || objectData.length === 0) {
+                return [];
             }
             
-            if (!videoObjectIntervals[videoId][object.object_name]) {
-                videoObjectIntervals[videoId][object.object_name] = [];
+            // Organize object data by video_id and object_name
+            const videoObjects = {};
+            
+            for (const object of objectData) {
+                const videoId = object.video_id;
+                const objectName = object.object_name;
+                
+                if (!videoObjects[videoId]) {
+                    videoObjects[videoId] = {};
+                }
+                
+                if (!videoObjects[videoId][objectName]) {
+                    videoObjects[videoId][objectName] = [];
+                }
+                
+                videoObjects[videoId][objectName].push({
+                    start_time: object.start_time,
+                    end_time: object.end_time
+                });
             }
             
-            // Add the time interval for this object instance
-            videoObjectIntervals[videoId][object.object_name].push({
-                start_time: object.start_time,
-                end_time: object.end_time,
-                object_id: object._id
-            });
+            // Find sequences in each video
+            const results = [];
+            
+            // Helper function to find sequential appearances
+            const findSequentialAppearances = (videoData, sequence, maxWindowSize) => {
+                const windows = [];
+                
+                // Get all instances of the first object
+                const firstObjectInstances = videoData[sequence[0]];
+                
+                for (const firstInstance of firstObjectInstances) {
+                    const startTime = firstInstance.start_time;
+                    let endTime = firstInstance.end_time;
+                    let validSequence = true;
+                    
+                    // For each subsequent object in the sequence
+                    for (let i = 1; i < sequence.length; i++) {
+                        const currentObject = sequence[i];
+                        const currentInstances = videoData[currentObject];
+                        
+                        // Find an instance that starts after the previous object ends
+                        const nextInstance = currentInstances.find(instance => 
+                            instance.start_time >= endTime
+                        );
+                        
+                        if (!nextInstance) {
+                            validSequence = false;
+                            break;
+                        }
+                        
+                        // Update the end time
+                        endTime = nextInstance.end_time;
+                        
+                        // Check if the window size exceeds the maximum
+                        if (maxWindowSize > 0 && (endTime - startTime) > maxWindowSize) {
+                            validSequence = false;
+                            break;
+                        }
+                    }
+                    
+                    if (validSequence) {
+                        windows.push({
+                            start_time: startTime,
+                            end_time: endTime
+                        });
+                    }
+                }
+                
+                return windows;
+            };
+            
+            // Helper function to format timestamps
+            const formatTimestamp = (timestamp) => {
+                const hours = Math.floor(timestamp / 3600);
+                const minutes = Math.floor((timestamp % 3600) / 60);
+                const seconds = Math.floor(timestamp % 60);
+                const milliseconds = Math.round((timestamp % 1) * 1000);
+                
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+            };
+            
+            for (const videoId in videoObjects) {
+                const videoData = videoObjects[videoId];
+                
+                // Check if all objects in the sequence are present in this video
+                if (sequence.every(obj => videoData[obj] && videoData[obj].length > 0)) {
+                    // Find sequences where objects appear in order
+                    const sequenceWindows = findSequentialAppearances(videoData, sequence, windowSize);
+                    
+                    if (sequenceWindows.length > 0) {
+                        results.push({
+                            video_id: videoId,
+                            windows: sequenceWindows.map(window => ({
+                                start_time: formatTimestamp(window.start_time),
+                                end_time: formatTimestamp(window.end_time)
+                            }))
+                        });
+                    }
+                }
+            }
+            
+            return results;
+        } catch (error) {
+            console.error("Error in querySequence:", error);
+            throw error;
         }
+    },
+    /**
+     * Find time windows where objects appear in sequence
+     * @param {Object} videoData - Object data organized by object name
+     * @param {Array} sequence - Array of object names in order
+     * @param {number} maxWindowSize - Maximum window size for the sequence
+     * @returns {Array} - Array of time windows
+     */
+    findSequentialAppearances: (videoData, sequence, maxWindowSize) => {
+        const windows = [];
         
-        console.log("videoObjectIntervals:", videoObjectIntervals);
+        // Get all instances of the first object
+        const firstObjectInstances = videoData[sequence[0]];
         
-        // Find sequences for each video
-        let results = [];
-        
-        for (let videoId in videoObjectIntervals) {
-            const videoObjects = videoObjectIntervals[videoId];
-            const sequenceWindows = findSequenceWindows(videoObjects, sequence, windowSize);
+        for (const firstInstance of firstObjectInstances) {
+            const startTime = firstInstance.start_time;
+            let endTime = firstInstance.end_time;
+            let validSequence = true;
             
-            if (sequenceWindows.length > 0) {
-                results.push({
-                    video_id: videoId,
-                    windows: sequenceWindows
+            // For each subsequent object in the sequence
+            for (let i = 1; i < sequence.length; i++) {
+                const currentObject = sequence[i];
+                const currentInstances = videoData[currentObject];
+                
+                // Find an instance that starts after the previous object ends
+                const nextInstance = currentInstances.find(instance => 
+                    instance.start_time >= endTime
+                );
+                
+                if (!nextInstance) {
+                    validSequence = false;
+                    break;
+                }
+                
+                // Update the end time
+                endTime = nextInstance.end_time;
+                
+                // Check if the window size exceeds the maximum
+                if (maxWindowSize > 0 && (endTime - startTime) > maxWindowSize) {
+                    validSequence = false;
+                    break;
+                }
+            }
+            
+            if (validSequence) {
+                windows.push({
+                    start_time: startTime,
+                    end_time: endTime
                 });
             }
         }
         
-        return results;
+        return windows;
+    },
+    /**
+     * Format a timestamp as a string
+     * @param {number} timestamp - Timestamp in seconds
+     * @returns {string} - Formatted timestamp
+     */
+    formatTimestamp: (timestamp) => {
+        const hours = Math.floor(timestamp / 3600);
+        const minutes = Math.floor((timestamp % 3600) / 60);
+        const seconds = Math.floor(timestamp % 60);
+        const milliseconds = Math.round((timestamp % 1) * 1000);
+        
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
     },
 };
