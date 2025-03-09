@@ -18,26 +18,29 @@ async function queryInstanceOverlapsInArea(req, reply) {
         // Get validated parameters from request
         const object = req.query.object;
         const count = parseInt(req.query.count, 10);
-        const area = req.query.area;
+        let area = req.query.area;
         
-        // Parse area if it's a JSON string
-        let parsedArea = area;
+        // Parse area if it's a string
         if (typeof area === 'string') {
-            if (area.startsWith('[')) {
-                parsedArea = JSON.parse(area);
-            } else {
-                // It's a named area, use the interpretRelativeArea function
-                parsedArea = interpretRelativeArea(area);
-                if (!parsedArea) {
-                    throw new ApiError(`Invalid area description: ${area}`, 400);
+            try {
+                if (area.startsWith('[')) {
+                    area = JSON.parse(area);
+                } else {
+                    // It's a named area, use the interpretRelativeArea function
+                    area = interpretRelativeArea(area);
+                    if (!area) {
+                        throw new ApiError(`Invalid area description: ${area}`, 400);
+                    }
                 }
+            } catch (e) {
+                throw new ApiError(`Invalid area format: ${area}`, 400);
             }
         }
 
         logger.info(`Processing query for object overlaps in area`, { 
             object, 
             count, 
-            area: parsedArea 
+            area 
         });
 
         // Instead of making an HTTP call, directly call the function
@@ -75,7 +78,7 @@ async function queryInstanceOverlapsInArea(req, reply) {
                 object,
                 merged_overlaps,
                 count,
-                parsedArea
+                area
             );
 
             logger.debug(`Found ${successIntervals.length} success intervals for video ${video_id}`);
@@ -90,7 +93,7 @@ async function queryInstanceOverlapsInArea(req, reply) {
         logger.query('Instance overlaps in area query completed', {
             object,
             count,
-            area: parsedArea,
+            area,
             resultCount: allSuccessIntervals.reduce((sum, video) => sum + video.success_intervals.length, 0)
         });
 
@@ -163,19 +166,39 @@ async function querySpatialObjectsTemporal(req, reply) {
 
         // Parse objects if it's a string
         if (typeof objects === 'string') {
-            objects = JSON.parse(objects);
+            try {
+                objects = JSON.parse(objects);
+            } catch (e) {
+                // If JSON parsing fails, try to handle it as a single object
+                if (objects.startsWith('[') && objects.endsWith(']')) {
+                    // It's likely a malformed JSON array, throw an error
+                    throw new ApiError(`Invalid objects format: ${objects}`, 400);
+                } else {
+                    // Treat it as a single object
+                    objects = [objects];
+                }
+            }
+        }
+
+        // Ensure objects is an array
+        if (!Array.isArray(objects)) {
+            objects = [objects];
         }
 
         // Parse area if it's a string
         if (typeof area === 'string') {
-            if (area.startsWith('[')) {
-                area = JSON.parse(area);
-            } else {
-                // It's a named area, use the interpretRelativeArea function
-                area = interpretRelativeArea(area);
-                if (!area) {
-                    throw new ApiError(`Invalid area description: ${area}`, 400);
+            try {
+                if (area.startsWith('[')) {
+                    area = JSON.parse(area);
+                } else {
+                    // It's a named area, use the interpretRelativeArea function
+                    area = interpretRelativeArea(area);
+                    if (!area) {
+                        throw new ApiError(`Invalid area description: ${area}`, 400);
+                    }
                 }
+            } catch (e) {
+                throw new ApiError(`Invalid area format: ${area}`, 400);
             }
         }
 
@@ -298,19 +321,39 @@ async function querySpatialObjects(req, reply) {
 
         // Parse objects if it's a string
         if (typeof objects === 'string') {
-            objects = JSON.parse(objects);
+            try {
+                objects = JSON.parse(objects);
+            } catch (e) {
+                // If JSON parsing fails, try to handle it as a single object
+                if (objects.startsWith('[') && objects.endsWith(']')) {
+                    // It's likely a malformed JSON array, throw an error
+                    throw new ApiError(`Invalid objects format: ${objects}`, 400);
+                } else {
+                    // Treat it as a single object
+                    objects = [objects];
+                }
+            }
+        }
+
+        // Ensure objects is an array
+        if (!Array.isArray(objects)) {
+            objects = [objects];
         }
 
         // Parse area if it's a string
         if (typeof area === 'string') {
-            if (area.startsWith('[')) {
-                area = JSON.parse(area);
-            } else {
-                // It's a named area, use the interpretRelativeArea function
-                area = interpretRelativeArea(area);
-                if (!area) {
-                    throw new ApiError(`Invalid area description: ${area}`, 400);
+            try {
+                if (area.startsWith('[')) {
+                    area = JSON.parse(area);
+                } else {
+                    // It's a named area, use the interpretRelativeArea function
+                    area = interpretRelativeArea(area);
+                    if (!area) {
+                        throw new ApiError(`Invalid area description: ${area}`, 400);
+                    }
                 }
+            } catch (e) {
+                throw new ApiError(`Invalid area format: ${area}`, 400);
             }
         }
 
@@ -358,19 +401,39 @@ async function querySpatialObjectsAnd(req, reply) {
 
         // Parse objects if it's a string
         if (typeof objects === 'string') {
-            objects = JSON.parse(objects);
+            try {
+                objects = JSON.parse(objects);
+            } catch (e) {
+                // If JSON parsing fails, try to handle it as a single object
+                if (objects.startsWith('[') && objects.endsWith(']')) {
+                    // It's likely a malformed JSON array, throw an error
+                    throw new ApiError(`Invalid objects format: ${objects}`, 400);
+                } else {
+                    // Treat it as a single object
+                    objects = [objects];
+                }
+            }
+        }
+
+        // Ensure objects is an array
+        if (!Array.isArray(objects)) {
+            objects = [objects];
         }
 
         // Parse area if it's a string
         if (typeof area === 'string') {
-            if (area.startsWith('[')) {
-                area = JSON.parse(area);
-            } else {
-                // It's a named area, use the interpretRelativeArea function
-                area = interpretRelativeArea(area);
-                if (!area) {
-                    throw new ApiError(`Invalid area description: ${area}`, 400);
+            try {
+                if (area.startsWith('[')) {
+                    area = JSON.parse(area);
+                } else {
+                    // It's a named area, use the interpretRelativeArea function
+                    area = interpretRelativeArea(area);
+                    if (!area) {
+                        throw new ApiError(`Invalid area description: ${area}`, 400);
+                    }
                 }
+            } catch (e) {
+                throw new ApiError(`Invalid area format: ${area}`, 400);
             }
         }
 
@@ -597,7 +660,28 @@ async function querySequence(req, reply) {
 
         // Parse sequence if it's a string
         if (typeof sequence === 'string') {
-            sequence = JSON.parse(sequence);
+            try {
+                sequence = JSON.parse(sequence);
+            } catch (e) {
+                // If JSON parsing fails, try to handle it as a single object
+                if (sequence.startsWith('[') && sequence.endsWith(']')) {
+                    // It's likely a malformed JSON array, throw an error
+                    throw new ApiError(`Invalid sequence format: ${sequence}`, 400);
+                } else {
+                    // Treat it as a single object
+                    sequence = [sequence];
+                }
+            }
+        }
+
+        // Ensure sequence is an array
+        if (!Array.isArray(sequence)) {
+            sequence = [sequence];
+        }
+
+        // Validate sequence
+        if (sequence.length < 2) {
+            throw new ApiError('Sequence must contain at least 2 objects', 400);
         }
 
         logger.info(`Querying for object sequences`, {

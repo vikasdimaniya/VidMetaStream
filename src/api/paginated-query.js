@@ -23,12 +23,46 @@ async function paginatedSpatialObjects(req, reply) {
     
     // Parse objects if it's a string
     if (typeof objects === 'string') {
-      objects = JSON.parse(objects);
+      try {
+        objects = JSON.parse(objects);
+      } catch (e) {
+        // If JSON parsing fails, try to handle it as a single object
+        if (objects.startsWith('[') && objects.endsWith(']')) {
+          // It's likely a malformed JSON array, throw an error
+          throw new ApiError(`Invalid objects format: ${objects}`, 400);
+        } else {
+          // Treat it as a single object
+          objects = [objects];
+        }
+      }
+    }
+    
+    // Ensure objects is an array
+    if (!Array.isArray(objects)) {
+      objects = [objects];
     }
     
     // Validate objects
-    if (!Array.isArray(objects) || objects.length === 0) {
+    if (objects.length === 0) {
       throw new ApiError('Invalid objects parameter: must be a non-empty array', 400);
+    }
+    
+    // Parse area if it's a string
+    if (typeof area === 'string') {
+      try {
+        if (area.startsWith('[')) {
+          area = JSON.parse(area);
+        } else {
+          // It's a named area, use the interpretRelativeArea function
+          const interpretRelativeArea = require('../utils/area-interpreter').interpretRelativeArea;
+          area = interpretRelativeArea(area);
+          if (!area) {
+            throw new ApiError(`Invalid area description: ${area}`, 400);
+          }
+        }
+      } catch (e) {
+        throw new ApiError(`Invalid area format: ${area}`, 400);
+      }
     }
     
     logger.info(`Processing paginated spatial objects query`, {
@@ -163,11 +197,27 @@ async function streamResults(req, reply) {
     
     // Parse objects if it's a string
     if (typeof objects === 'string') {
-      objects = JSON.parse(objects);
+      try {
+        objects = JSON.parse(objects);
+      } catch (e) {
+        // If JSON parsing fails, try to handle it as a single object
+        if (objects.startsWith('[') && objects.endsWith(']')) {
+          // It's likely a malformed JSON array, throw an error
+          throw new ApiError(`Invalid objects format: ${objects}`, 400);
+        } else {
+          // Treat it as a single object
+          objects = [objects];
+        }
+      }
+    }
+    
+    // Ensure objects is an array
+    if (!Array.isArray(objects)) {
+      objects = [objects];
     }
     
     // Validate objects
-    if (!Array.isArray(objects) || objects.length === 0) {
+    if (objects.length === 0) {
       throw new ApiError('Invalid objects parameter: must be a non-empty array', 400);
     }
     

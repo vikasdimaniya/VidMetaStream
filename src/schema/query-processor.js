@@ -13,18 +13,7 @@ const instanceOverlapsInAreaSchema = {
       properties: {
         object: { type: 'string', minLength: 1 },
         count: { type: 'integer', minimum: 2 },
-        area: { 
-          oneOf: [
-            { type: 'string' }, // For named areas like "top-half"
-            { 
-              type: 'array', 
-              minItems: 4, 
-              maxItems: 4,
-              items: { type: 'number' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        }
+        area: { type: 'string' }
       }
     },
     response: {
@@ -91,28 +80,8 @@ const spatialObjectsTemporalSchema = {
       type: 'object',
       required: ['objects', 'area', 'start_time', 'end_time'],
       properties: {
-        objects: { 
-          oneOf: [
-            { 
-              type: 'array', 
-              minItems: 1,
-              items: { type: 'string' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        },
-        area: { 
-          oneOf: [
-            { type: 'string' }, // For named areas like "top-half"
-            { 
-              type: 'array', 
-              minItems: 4, 
-              maxItems: 4,
-              items: { type: 'number' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        },
+        objects: { type: 'string' },
+        area: { type: 'string' },
         start_time: { type: 'number', minimum: 0 },
         end_time: { type: 'number', minimum: 0 }
       }
@@ -127,16 +96,7 @@ const queryVideosSchema = {
       type: 'object',
       required: ['objects'],
       properties: {
-        objects: { 
-          oneOf: [
-            { 
-              type: 'array', 
-              minItems: 1,
-              items: { type: 'string' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        },
+        objects: { type: 'string' },
         window_size: { type: 'integer', minimum: 0 }
       }
     }
@@ -150,28 +110,8 @@ const spatialObjectsSchema = {
       type: 'object',
       required: ['objects', 'area'],
       properties: {
-        objects: { 
-          oneOf: [
-            { 
-              type: 'array', 
-              minItems: 1,
-              items: { type: 'string' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        },
-        area: { 
-          oneOf: [
-            { type: 'string' }, // For named areas like "top-half"
-            { 
-              type: 'array', 
-              minItems: 4, 
-              maxItems: 4,
-              items: { type: 'number' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        }
+        objects: { type: 'string' },
+        area: { type: 'string' }
       }
     }
   }
@@ -184,28 +124,8 @@ const spatialObjectsAndSchema = {
       type: 'object',
       required: ['objects', 'area'],
       properties: {
-        objects: { 
-          oneOf: [
-            { 
-              type: 'array', 
-              minItems: 1,
-              items: { type: 'string' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        },
-        area: { 
-          oneOf: [
-            { type: 'string' }, // For named areas like "top-half"
-            { 
-              type: 'array', 
-              minItems: 4, 
-              maxItems: 4,
-              items: { type: 'number' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        }
+        objects: { type: 'string' },
+        area: { type: 'string' }
       }
     }
   }
@@ -292,16 +212,7 @@ const querySequenceSchema = {
       type: 'object',
       required: ['sequence'],
       properties: {
-        sequence: { 
-          oneOf: [
-            { 
-              type: 'array', 
-              minItems: 2,
-              items: { type: 'string' }
-            },
-            { type: 'string', pattern: '^\\[.*\\]$' } // For JSON string arrays
-          ]
-        },
+        sequence: { type: 'string' },
         window_size: { type: 'integer', minimum: 0 }
       }
     }
