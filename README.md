@@ -1,119 +1,359 @@
 # VidMetaStream
 
-VidMetaStream is a sophisticated video processing and querying system that allows for complex analysis of video content based on object detection and temporal/spatial relationships.
+VidMetaStream is a powerful video metadata querying system that allows you to search and analyze video content based on objects, spatial relationships, temporal sequences, and more.
 
-## Recent Improvements
+## Table of Contents
 
-The codebase has undergone several improvements to enhance maintainability, performance, and developer experience:
+- [Introduction](#introduction)
+- [API Endpoints](#api-endpoints)
+  - [Object Queries](#object-queries)
+  - [Spatial Queries](#spatial-queries)
+  - [Temporal Queries](#temporal-queries)
+  - [Sequence Queries](#sequence-queries)
+  - [Instance Queries](#instance-queries)
+  - [Video Chunk Queries](#video-chunk-queries)
+- [Query Parameters](#query-parameters)
+- [Response Formats](#response-formats)
+- [Examples](#examples)
 
-### 1. Code Organization
+## Introduction
 
-- **Modular Architecture**: Refactored the monolithic query processor into smaller, more focused modules
-- **Separation of Concerns**: Moved utility functions to dedicated files based on their purpose
-- **Consistent Error Handling**: Implemented a centralized error handling mechanism with custom error classes
+VidMetaStream provides a comprehensive API for querying video metadata. The system allows you to:
 
-### 2. New Features
-
-- **Structured Logging**: Added a comprehensive logging system with different log levels and file output
-- **Input Validation**: Implemented robust input validation for API endpoints
-- **Configuration Management**: Centralized configuration in a single file with environment variable support
-
-### 3. Developer Experience
-
-- **Better Documentation**: Added JSDoc comments to functions and classes
-- **Code Consistency**: Standardized coding patterns across the codebase
-- **Environment Variables**: Added .env.example file to document required environment variables
-
-### 4. Algorithmic Optimizations
-
-- **Spatial Indexing**: Implemented QuadTree data structure for efficient spatial queries (O(log n) complexity)
-- **Temporal Indexing**: Added Interval Tree for efficient temporal queries and overlap detection
-- **Query Caching**: Implemented LRU cache with TTL for frequently accessed query results
-- **Sweep Line Algorithm**: Optimized overlap detection from O(n²) to O(n log n) complexity
-- **Batch Processing**: Added support for processing multiple queries in a single request
-- **Pagination**: Implemented offset and cursor-based pagination for large result sets
-- **Streaming**: Added streaming support for large result sets to reduce memory usage
-- **Parallel Processing**: Implemented worker threads for CPU-intensive operations
-
-## Project Structure
-
-```
-src/
-├── api/              # API handlers
-│   ├── batch-query.js    # Batch query processing
-│   ├── paginated-query.js # Paginated query handling
-│   └── query-processor.js # Main query handlers
-├── db/               # Database connection and models
-├── model/            # Data models
-├── routes/           # API routes
-├── schema/           # API schemas
-├── services/         # External service integrations
-└── utils/            # Utility functions
-    ├── errors.js         # Custom error classes
-    ├── interval-tree.js  # Temporal indexing
-    ├── logger.js         # Logging utility
-    ├── pagination.js     # Pagination utilities
-    ├── query-cache.js    # Query result caching
-    ├── query-processor.js # Query processing utilities
-    ├── spatial-index.js  # Spatial indexing with QuadTree
-    ├── spatial-utils.js  # Spatial utilities
-    ├── validation.js     # Input validation utilities
-    └── worker.js         # Worker thread pool
-```
-
-## Getting Started
-
-1. Clone the repository
-2. Copy `.env.example` to `.env` and update the values
-3. Install dependencies: `npm install`
-4. Start the server: `npm start`
+- Find objects in videos
+- Search for objects in specific spatial areas
+- Query for temporal relationships between objects
+- Find sequences of objects appearing in order
+- Analyze object instances and their overlaps
+- Extract video chunks based on query results
 
 ## API Endpoints
 
-### Query Endpoints
+### Object Queries
 
-- `GET /query/objects` - Query videos for objects
-- `GET /query/spatialObjects` - Query for objects in specific areas
-- `GET /query/spatialObjectsTemporal` - Query for objects in specific areas during a time range
-- `GET /query/spatialObjectsAnd` - Query for objects that satisfy multiple spatial conditions
-- `GET /query/queryDistinctInstances` - Query for distinct instances of objects
-- `GET /query/queryInstanceOverlaps` - Query for overlaps of the same object class
-- `GET /query/queryInstanceOverlapsInArea` - Query for overlaps of the same object class in a specific area
-- `GET /query/queryInstancesAtTime` - Query for instances of objects at a specific time
-- `GET /query/tempral/objects` - Query for sequences of objects appearing in order
+#### GET /query/objects
 
-### Optimized Query Endpoints
+Retrieves videos containing specific objects.
 
-- `POST /query/batch` - Process multiple queries in a single request
-- `GET /query/spatialObjectsPaginated` - Paginated query for objects in specific areas
-- `GET /query/queryInstancesPaginated` - Paginated query for instances of objects
-- `GET /query/stream` - Stream large result sets
+**How it works:**
+1. The endpoint accepts a list of object names to search for
+2. It queries the database for videos containing these objects
+3. Returns a list of videos with metadata about the objects found
 
-### Video Endpoints
+**Parameters:**
+- `objects`: JSON array of object names (e.g., `["person", "car"]`)
+- `window_size` (optional): Time window size in seconds
 
-- `POST /query/chunks` - Get video chunks based on time windows
-- `GET /query/chunk/download/:chunk_id` - Download a specific video chunk
+**Example:**
+```
+GET /query/objects?objects=["person","car"]&window_size=10
+```
 
-## Performance Improvements
+### Spatial Queries
 
-The algorithmic optimizations have significantly improved query performance:
+#### GET /query/spatialObjects
 
-| Query Type | Before | After | Improvement |
-|------------|--------|-------|-------------|
-| Spatial Queries | O(n) | O(log n) | ~100x faster for large datasets |
-| Temporal Queries | O(n²) | O(n log n) | ~10x faster for large datasets |
-| Overlap Detection | O(n²) | O(n log n) | ~10x faster for many instances |
-| Large Result Sets | Memory-bound | Streaming | Reduced memory usage by ~90% |
-| Multiple Queries | Sequential | Parallel | ~4x faster on quad-core systems |
+Finds objects within specific spatial areas in videos.
 
-## Environment Variables
+**How it works:**
+1. The endpoint accepts a list of object names and a spatial area
+2. It queries the database for objects that appear within the specified area
+3. Returns videos and timestamps where the objects appear in the area
 
-See `.env.example` for a list of required environment variables.
+**Parameters:**
+- `objects`: JSON array of object names (e.g., `["person", "car"]`)
+- `area`: JSON array defining the area coordinates or a named area
 
-## Future Improvements
+**Example:**
+```
+GET /query/spatialObjects?objects=["person"]&area=[[0,0],[0,1],[1,1],[1,0]]
+```
 
-- Add unit and integration tests
-- Implement distributed processing for very large datasets
-- Add real-time notifications via WebSockets
-- Implement more advanced spatial and temporal query operators
-- Add machine learning-based query optimization
+#### GET /query/spatialObjectsAnd
+
+Similar to spatialObjects but requires ALL objects to be present in the area simultaneously.
+
+**How it works:**
+1. The endpoint accepts a list of object names and a spatial area
+2. It finds instances where all specified objects appear in the area at the same time
+3. Returns videos and time windows where this condition is met
+
+**Parameters:**
+- `objects`: JSON array of object names (e.g., `["person", "car"]`)
+- `area`: JSON array defining the area coordinates or a named area
+
+**Example:**
+```
+GET /query/spatialObjectsAnd?objects=["person","car"]&area=[[0,0],[0,1],[1,1],[1,0]]
+```
+
+### Temporal Queries
+
+#### GET /query/spatialObjectsTemporal
+
+Finds objects within specific spatial areas during a specific time window.
+
+**How it works:**
+1. The endpoint accepts object names, an area, and a time range
+2. It queries for objects that appear in the area during the specified time window
+3. Returns videos and timestamps where the conditions are met
+
+**Parameters:**
+- `objects`: JSON array of object names
+- `area`: JSON array defining the area coordinates or a named area
+- `start_time`: Start time in seconds
+- `end_time`: End time in seconds
+
+**Example:**
+```
+GET /query/spatialObjectsTemporal?objects=["person"]&area=[[0,0],[0,1],[1,1],[1,0]]&start_time=10&end_time=20
+```
+
+#### GET /query/queryInstancesAtTime
+
+Finds instances of objects at a specific timestamp.
+
+**How it works:**
+1. The endpoint accepts an object name and a timestamp
+2. It queries for instances of the object at the exact timestamp
+3. Returns all instances found at that time
+
+**Parameters:**
+- `object`: Object name (e.g., "person")
+- `time`: Timestamp in seconds
+
+**Example:**
+```
+GET /query/queryInstancesAtTime?object=person&time=15.5
+```
+
+### Sequence Queries
+
+#### GET /query/tempral/objects
+
+Finds sequences of objects appearing in order within a time window.
+
+**How it works:**
+1. The endpoint accepts a sequence of object names and a maximum window size
+2. It searches for instances where the objects appear in the specified order
+3. Each subsequent object must start after the previous object ends
+4. The total time span must be within the specified window size
+5. Returns videos and time windows where the sequence is found
+
+**Parameters:**
+- `sequence`: JSON array of object names in order (e.g., `["person", "car"]`)
+- `window_size` (optional): Maximum time window in seconds
+
+**Example:**
+```
+GET /query/tempral/objects?sequence=["person","car"]&window_size=10
+```
+
+### Instance Queries
+
+#### GET /query/queryDistinctInstances
+
+Retrieves distinct instances of a specific object.
+
+**How it works:**
+1. The endpoint accepts an object name
+2. It queries for all distinct instances of the object across videos
+3. Returns a list of instances with their metadata
+
+**Parameters:**
+- `object`: Object name (e.g., "person")
+
+**Example:**
+```
+GET /query/queryDistinctInstances?object=person
+```
+
+#### GET /query/queryInstanceOverlaps
+
+Finds overlaps between instances of the same object type.
+
+**How it works:**
+1. The endpoint accepts an object name and a count
+2. It searches for situations where the specified number of instances of the object overlap in time
+3. Returns videos and time windows where the overlaps occur
+
+**Parameters:**
+- `object`: Object name (e.g., "person")
+- `count`: Minimum number of overlapping instances (integer ≥ 2)
+
+**Example:**
+```
+GET /query/queryInstanceOverlaps?object=person&count=3
+```
+
+#### GET /query/queryInstanceOverlapsInArea
+
+Finds overlaps between instances of the same object type within a specific area.
+
+**How it works:**
+1. The endpoint accepts an object name, a count, and an area
+2. It searches for situations where the specified number of instances of the object overlap in time and are within the area
+3. Returns videos and time windows where these conditions are met
+
+**Parameters:**
+- `object`: Object name (e.g., "person")
+- `count`: Minimum number of overlapping instances (integer ≥ 2)
+- `area`: JSON array defining the area coordinates or a named area
+
+**Example:**
+```
+GET /query/queryInstanceOverlapsInArea?object=person&count=2&area=[[0,0],[0,1],[1,1],[1,0]]
+```
+
+### Video Chunk Queries
+
+#### POST /query/chunks
+
+Retrieves video chunks based on specified time windows.
+
+**How it works:**
+1. The endpoint accepts a list of videos and time windows
+2. It extracts the video chunks corresponding to the specified windows
+3. Returns metadata about the chunks that can be downloaded
+
+**Parameters:**
+- `videos`: JSON array of objects containing video_id and windows
+
+**Example:**
+```
+POST /query/chunks
+{
+  "videos": [
+    {
+      "video_id": "67ccd7f9653aa62e8e33ee29",
+      "windows": [
+        {
+          "start_time": "00:00:10.000",
+          "end_time": "00:00:20.000"
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### GET /query/chunk/download/:chunk_id
+
+Downloads a specific video chunk.
+
+**How it works:**
+1. The endpoint accepts a chunk ID
+2. It retrieves the video chunk from storage
+3. Returns the video chunk file for download
+
+**Parameters:**
+- `chunk_id`: ID of the chunk to download (path parameter)
+
+**Example:**
+```
+GET /query/chunk/download/abc123def456
+```
+
+## Query Parameters
+
+### Objects Parameter
+
+The `objects` parameter accepts a JSON array of object names. Examples include:
+- `["person"]` - Single object
+- `["person", "car"]` - Multiple objects
+- `"person"` - Single object as string (will be converted to array)
+
+### Area Parameter
+
+The `area` parameter defines a spatial region and can be specified in two ways:
+1. As a JSON array of coordinates defining a polygon: `[[x1,y1], [x2,y2], ...]`
+2. As a named area: `"center"`, `"top"`, `"bottom"`, `"left"`, `"right"`, etc.
+
+### Sequence Parameter
+
+The `sequence` parameter defines an ordered list of objects to search for in sequence:
+- `["person", "car"]` - Find instances where a person appears, followed by a car
+- `["car", "person", "bicycle"]` - Find instances where a car appears, followed by a person, followed by a bicycle
+
+### Window Size Parameter
+
+The `window_size` parameter defines the maximum time span (in seconds) for:
+- Object sequences in the `tempral/objects` endpoint
+- Object co-occurrences in the `objects` endpoint
+
+## Response Formats
+
+Responses are returned in JSON format and typically include:
+
+- Status code (200 for success)
+- Data array containing matching results
+- For object queries: video_id, object_name, and frames
+- For sequence queries: video_id and time windows
+- For spatial queries: video_id, object_name, and coordinates
+
+## Examples
+
+### Finding a Person Followed by a Car
+
+```
+GET /query/tempral/objects?sequence=["person","car"]&window_size=10
+```
+
+Response:
+```json
+[
+  {
+    "video_id": "67ccd7f9653aa62e8e33ee29",
+    "windows": [
+      {
+        "start_time": "00:01:15.200",
+        "end_time": "00:01:22.800"
+      }
+    ]
+  }
+]
+```
+
+### Finding People in the Center of the Frame
+
+```
+GET /query/spatialObjects?objects=["person"]&area="center"
+```
+
+Response:
+```json
+[
+  {
+    "video_id": "67ccd7f9653aa62e8e33ee29",
+    "object_name": "person",
+    "frames": [
+      {
+        "frame_id": 120,
+        "timestamp": 4.0,
+        "bbox": [0.4, 0.4, 0.6, 0.6]
+      }
+    ]
+  }
+]
+```
+
+### Finding Overlapping Instances of People
+
+```
+GET /query/queryInstanceOverlaps?object=person&count=3
+```
+
+Response:
+```json
+[
+  {
+    "video_id": "67ccd7f9653aa62e8e33ee29",
+    "success_intervals": [
+      {
+        "start": "00:00:15.000",
+        "end": "00:00:18.500"
+      }
+    ]
+  }
+]
+```
