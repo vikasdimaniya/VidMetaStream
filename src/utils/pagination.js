@@ -66,8 +66,10 @@ async function paginateCursor(cursor, options = {}) {
   const page = options.page || 1;
   const limit = options.limit || 20;
   
-  // Get total count
-  const total = await cursor.count();
+  // Get total count - using countDocuments() instead of count()
+  // Clone the cursor to avoid modifying the original
+  const countCursor = cursor.clone();
+  const total = await countCursor.countDocuments();
   
   // Apply pagination
   const skip = (page - 1) * limit;

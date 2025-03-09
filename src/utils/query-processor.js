@@ -518,6 +518,106 @@ const getQueryCursor = async ({ objects }) => {
     return cursor;
 };
 
+// Merge helper function for logical OR object spatial queries
+const mergeWindows = (windows) => {
+    if (windows.length === 0) return [];
+    
+    // Sort windows by start time
+    windows.sort((a, b) => new Date(`1970-01-01T${a.start_time}Z`) - new Date(`1970-01-01T${b.start_time}Z`));
+
+    const merged = [windows[0]];
+
+    for (let i = 1; i < windows.length; i++) {
+        const prev = merged[merged.length - 1];
+        const current = windows[i];
+
+        const prevEndTime = new Date(`1970-01-01T${prev.end_time}Z`);
+        const currentStartTime = new Date(`1970-01-01T${current.start_time}Z`);
+
+        if (currentStartTime <= prevEndTime) {
+            // Merge overlapping or contiguous windows
+            prev.end_time = new Date(Math.max(prevEndTime, new Date(`1970-01-01T${current.end_time}Z`)))
+                .toISOString()
+                .split('T')[1]
+                .slice(0, 12); // Keep only time with milliseconds
+        } else {
+            merged.push(current);
+        }
+    }
+
+    return merged;
+};
+
+// Helper to compute intersection of windows query objects logical AND
+const intersectWindows = (windowsList) => {
+    if (!windowsList || windowsList.length === 0) return [];
+
+    let intersection = windowsList[0]; // Start with the first object's windows
+
+    for (let i = 1; i < windowsList.length; i++) {
+        const current = windowsList[i];
+        const tempIntersection = [];
+
+        let j = 0, k = 0;
+
+        while (j < intersection.length && k < current.length) {
+            const start = Math.max(
+                new Date(`1970-01-01T${intersection[j].start_time}Z`),
+                new Date(`1970-01-01T${current[k].start_time}Z`)
+            );
+            const end = Math.min(
+                new Date(`1970-01-01T${intersection[j].end_time}Z`),
+                new Date(`1970-01-01T${current[k].end_time}Z`)
+            );
+
+            if (start < end) {
+                tempIntersection.push({
+                    start_time: new Date(start).toISOString().split('T')[1].slice(0, 12),
+                    end_time: new Date(end).toISOString().split('T')[1].slice(0, 12),
+                });
+            }
+
+            // Move the pointer with the earlier end time
+            if (
+                new Date(`1970-01-01T${intersection[j].end_time}Z`) <
+                new Date(`1970-01-01T${current[k].end_time}Z`)
+            ) {
+                j++;
+            } else {
+                k++;
+            }
+        }
+
+        intersection = tempIntersection; // Update with the latest intersection
+    }
+
+    return intersection;
+};
+
+// helper function for combinations of distinct instance types
+const getCombinations = (array, size) => {
+    if (size > array.length) return [];
+    const results = [];
+    const combination = (start, depth, prefix) => {
+        if (depth === 0) {
+            results.push(prefix);
+            return;
+        }
+        for (let i = start; i <= array.length - depth; i++) {
+            combination(i + 1, depth - 1, [...prefix, array[i]]);
+        }
+    };
+    combination(0, size, []);
+    return results;
+    
+}
+// Helper function to check if a point is within a defined region
+const isWithinRegion = (point, region) => {
+    const [x1, y1, x2, y2] = region;
+    const [x, y] = point;
+    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+};
+
 module.exports = {
     getDocumentsByVideoId,
     filterOverlapsForVideo,
@@ -773,242 +873,4 @@ module.exports = {
         
         return results;
     },
-};
-
-// Merge helper function for logical OR object spatial queries
-const mergeWindows = (windows) => {
-    if (windows.length === 0) return [];
-    
-    // Sort windows by start time
-    windows.sort((a, b) => new Date(`1970-01-01T${a.start_time}Z`) - new Date(`1970-01-01T${b.start_time}Z`));
-
-    const merged = [windows[0]];
-
-    for (let i = 1; i < windows.length; i++) {
-        const prev = merged[merged.length - 1];
-        const current = windows[i];
-
-        const prevEndTime = new Date(`1970-01-01T${prev.end_time}Z`);
-        const currentStartTime = new Date(`1970-01-01T${current.start_time}Z`);
-
-        if (currentStartTime <= prevEndTime) {
-            // Merge overlapping or contiguous windows
-            prev.end_time = new Date(Math.max(prevEndTime, new Date(`1970-01-01T${current.end_time}Z`)))
-                .toISOString()
-                .split('T')[1]
-                .slice(0, 12); // Keep only time with milliseconds
-        } else {
-            merged.push(current);
-        }
-    }
-
-    return merged;
-};
-
-// Helper to compute intersection of windows query objects logical AND
-const intersectWindows = (windowsList) => {
-    if (!windowsList || windowsList.length === 0) return [];
-
-    let intersection = windowsList[0]; // Start with the first object's windows
-
-    for (let i = 1; i < windowsList.length; i++) {
-        const current = windowsList[i];
-        const tempIntersection = [];
-
-        let j = 0, k = 0;
-
-        while (j < intersection.length && k < current.length) {
-            const start = Math.max(
-                new Date(`1970-01-01T${intersection[j].start_time}Z`),
-                new Date(`1970-01-01T${current[k].start_time}Z`)
-            );
-            const end = Math.min(
-                new Date(`1970-01-01T${intersection[j].end_time}Z`),
-                new Date(`1970-01-01T${current[k].end_time}Z`)
-            );
-
-            if (start < end) {
-                tempIntersection.push({
-                    start_time: new Date(start).toISOString().split('T')[1].slice(0, 12),
-                    end_time: new Date(end).toISOString().split('T')[1].slice(0, 12),
-                });
-            }
-
-            // Move the pointer with the earlier end time
-            if (
-                new Date(`1970-01-01T${intersection[j].end_time}Z`) <
-                new Date(`1970-01-01T${current[k].end_time}Z`)
-            ) {
-                j++;
-            } else {
-                k++;
-            }
-        }
-
-        intersection = tempIntersection; // Update with the latest intersection
-    }
-
-    return intersection;
-};
-
-// helper function for combinations of distinct instance types
-const getCombinations = (array, size) => {
-    if (size > array.length) return [];
-    const results = [];
-    const combination = (start, depth, prefix) => {
-        if (depth === 0) {
-            results.push(prefix);
-            return;
-        }
-        for (let i = start; i <= array.length - depth; i++) {
-            combination(i + 1, depth - 1, [...prefix, array[i]]);
-        }
-    };
-    combination(0, size, []);
-    return results;
-    
-}
-// Helper function to check if a point is within a defined region
-const isWithinRegion = (point, region) => {
-    const [x1, y1, x2, y2] = region;
-    const [x, y] = point;
-    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
-};
-
-/**
- * Find time windows where objects appear in a specified sequence with minimum window size
- * @param {Object} videoObjects - Object intervals grouped by object name for a single video
- * @param {Array} sequence - Array of object names in the order they should appear
- * @param {number} windowSize - Minimum duration for the sequence in seconds
- * @returns {Array} - Array of time windows containing the sequence
- */
-const findSequenceWindows = (videoObjects, sequence, windowSize) => {
-    const sequenceWindows = [];
-    
-    // Check if all objects in the sequence exist in this video
-    for (let objectName of sequence) {
-        if (!videoObjects[objectName] || videoObjects[objectName].length === 0) {
-            console.log(`Object '${objectName}' not found in video, skipping sequence detection`);
-            return []; // If any object in sequence is missing, no valid sequences
-        }
-    }
-    
-    // Get all intervals for the first object in sequence
-    const firstObjectIntervals = videoObjects[sequence[0]];
-    
-    // For each occurrence of the first object, try to find a valid sequence
-    for (let firstInterval of firstObjectIntervals) {
-        const sequenceCandidate = findSequenceFromStart(
-            videoObjects, 
-            sequence, 
-            firstInterval.start_time, 
-            windowSize
-        );
-        
-        if (sequenceCandidate) {
-            sequenceWindows.push(sequenceCandidate);
-        }
-    }
-    
-    // Merge overlapping sequence windows
-    return mergeSequenceWindows(sequenceWindows);
-};
-
-/**
- * Try to find a valid sequence starting from a given time
- * @param {Object} videoObjects - Object intervals grouped by object name
- * @param {Array} sequence - Array of object names in order
- * @param {number} startTime - Starting time to look for sequence
- * @param {number} windowSize - Minimum window size in seconds
- * @returns {Object|null} - Sequence window or null if not found
- */
-const findSequenceFromStart = (videoObjects, sequence, startTime, windowSize) => {
-    let currentTime = startTime;
-    let sequenceEnd = startTime;
-    const foundObjects = [];
-    
-    // Try to find each object in sequence order
-    for (let i = 0; i < sequence.length; i++) {
-        const objectName = sequence[i];
-        const objectIntervals = videoObjects[objectName];
-        
-        // Find the next occurrence of this object after currentTime
-        let foundInterval = null;
-        for (let interval of objectIntervals) {
-            if (interval.start_time >= currentTime) {
-                if (!foundInterval || interval.start_time < foundInterval.start_time) {
-                    foundInterval = interval;
-                }
-            }
-        }
-        
-        if (!foundInterval) {
-            // Object not found after current time, sequence invalid
-            return null;
-        }
-        
-        // Update sequence tracking
-        foundObjects.push({
-            object_name: objectName,
-            start_time: foundInterval.start_time,
-            end_time: foundInterval.end_time,
-            object_id: foundInterval.object_id
-        });
-        
-        currentTime = foundInterval.start_time;
-        sequenceEnd = Math.max(sequenceEnd, foundInterval.end_time);
-    }
-    
-    // Check if the total sequence duration meets minimum window size
-    const sequenceDuration = sequenceEnd - startTime;
-    if (sequenceDuration < windowSize) {
-        return null;
-    }
-    
-    // Return valid sequence window
-    return {
-        start_time: startTime,
-        end_time: sequenceEnd,
-        duration: sequenceDuration,
-        objects: foundObjects
-    };
-};
-
-/**
- * Merge overlapping sequence windows
- * @param {Array} windows - Array of sequence windows
- * @returns {Array} - Merged sequence windows
- */
-const mergeSequenceWindows = (windows) => {
-    if (windows.length === 0) return [];
-    
-    // Sort windows by start time
-    windows.sort((a, b) => a.start_time - b.start_time);
-    
-    const merged = [windows[0]];
-    
-    for (let i = 1; i < windows.length; i++) {
-        const current = windows[i];
-        const prev = merged[merged.length - 1];
-        
-        // Check if windows overlap or are contiguous
-        if (current.start_time <= prev.end_time) {
-            // Merge windows
-            prev.end_time = Math.max(prev.end_time, current.end_time);
-            prev.duration = prev.end_time - prev.start_time;
-            
-            // Combine objects from both windows (avoid duplicates)
-            const combinedObjects = [...prev.objects];
-            for (let obj of current.objects) {
-                if (!combinedObjects.find(existing => existing.object_id === obj.object_id)) {
-                    combinedObjects.push(obj);
-                }
-            }
-            prev.objects = combinedObjects;
-        } else {
-            merged.push(current);
-        }
-    }
-    
-    return merged;
 };
