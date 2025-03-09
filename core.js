@@ -1,13 +1,19 @@
 require('dotenv').config();
 console.log("AWS_REGION:", process.env.AWS_REGION);
+console.log('MONGODB_URI from env:', process.env.MONGODB_URI);
 const mongoose = require('mongoose');
 const { S3Client } = require('@aws-sdk/client-s3');
+
+// Configure S3 client to use MinIO
 const s3Client = new S3Client({
     region: process.env.AWS_REGION,
     credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY,
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     },
+    endpoint: process.env.AWS_S3_ENDPOINT_URL,
+    forcePathStyle: process.env.AWS_S3_ADDRESSING_STYLE === 'path',
+    tls: false // Disable SSL verification for local development
 });
 
 const dbName = 'vidmetastream';
@@ -22,7 +28,7 @@ async function initMongo() {
             useNewUrlParser: true,
             useUnifiedTopology: true,
         }); // Connect to MongoDB
-        db = mongoose.connection; // Access the native MongoDB driver’s DB instance
+        db = mongoose.connection; // Access the native MongoDB driver's DB instance
         console.log('Connected to MongoDB');
         gridFSBucket = new mongoose.mongo.GridFSBucket(mongoose.connection, {
             bucketName: "filesBucket",

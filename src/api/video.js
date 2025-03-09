@@ -33,7 +33,7 @@ module.exports = {
         
         await video.save();
 
-        let url = await s3Service.getUploadSignedUrl(process.env.AWS_BUCKET_NAME, video._id.toString());
+        let url = await s3Service.getUploadSignedUrl(process.env.AWS_STORAGE_BUCKET_NAME, video._id.toString());
         return {video, upload_url: url};
     },
 
@@ -75,7 +75,7 @@ module.exports = {
 
         // upload the video to s3
         let key = video._id.toString();
-        await s3Service.uploadLargeVideoFile(process.env.AWS_BUCKET_NAME, key, video.uploadTempLocation);
+        await s3Service.uploadLargeVideoFile(process.env.AWS_STORAGE_BUCKET_NAME, key, video.uploadTempLocation);
         video.status = 'uploaded';
         let saved = await video.save();
         if (saved.errors || saved.error) {

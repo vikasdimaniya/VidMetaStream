@@ -518,6 +518,106 @@ const getQueryCursor = async ({ objects }) => {
     return cursor;
 };
 
+// Merge helper function for logical OR object spatial queries
+const mergeWindows = (windows) => {
+    if (windows.length === 0) return [];
+    
+    // Sort windows by start time
+    windows.sort((a, b) => new Date(`1970-01-01T${a.start_time}Z`) - new Date(`1970-01-01T${b.start_time}Z`));
+
+    const merged = [windows[0]];
+
+    for (let i = 1; i < windows.length; i++) {
+        const prev = merged[merged.length - 1];
+        const current = windows[i];
+
+        const prevEndTime = new Date(`1970-01-01T${prev.end_time}Z`);
+        const currentStartTime = new Date(`1970-01-01T${current.start_time}Z`);
+
+        if (currentStartTime <= prevEndTime) {
+            // Merge overlapping or contiguous windows
+            prev.end_time = new Date(Math.max(prevEndTime, new Date(`1970-01-01T${current.end_time}Z`)))
+                .toISOString()
+                .split('T')[1]
+                .slice(0, 12); // Keep only time with milliseconds
+        } else {
+            merged.push(current);
+        }
+    }
+
+    return merged;
+};
+
+// Helper to compute intersection of windows query objects logical AND
+const intersectWindows = (windowsList) => {
+    if (!windowsList || windowsList.length === 0) return [];
+
+    let intersection = windowsList[0]; // Start with the first object's windows
+
+    for (let i = 1; i < windowsList.length; i++) {
+        const current = windowsList[i];
+        const tempIntersection = [];
+
+        let j = 0, k = 0;
+
+        while (j < intersection.length && k < current.length) {
+            const start = Math.max(
+                new Date(`1970-01-01T${intersection[j].start_time}Z`),
+                new Date(`1970-01-01T${current[k].start_time}Z`)
+            );
+            const end = Math.min(
+                new Date(`1970-01-01T${intersection[j].end_time}Z`),
+                new Date(`1970-01-01T${current[k].end_time}Z`)
+            );
+
+            if (start < end) {
+                tempIntersection.push({
+                    start_time: new Date(start).toISOString().split('T')[1].slice(0, 12),
+                    end_time: new Date(end).toISOString().split('T')[1].slice(0, 12),
+                });
+            }
+
+            // Move the pointer with the earlier end time
+            if (
+                new Date(`1970-01-01T${intersection[j].end_time}Z`) <
+                new Date(`1970-01-01T${current[k].end_time}Z`)
+            ) {
+                j++;
+            } else {
+                k++;
+            }
+        }
+
+        intersection = tempIntersection; // Update with the latest intersection
+    }
+
+    return intersection;
+};
+
+// helper function for combinations of distinct instance types
+const getCombinations = (array, size) => {
+    if (size > array.length) return [];
+    const results = [];
+    const combination = (start, depth, prefix) => {
+        if (depth === 0) {
+            results.push(prefix);
+            return;
+        }
+        for (let i = start; i <= array.length - depth; i++) {
+            combination(i + 1, depth - 1, [...prefix, array[i]]);
+        }
+    };
+    combination(0, size, []);
+    return results;
+    
+}
+// Helper function to check if a point is within a defined region
+const isWithinRegion = (point, region) => {
+    const [x1, y1, x2, y2] = region;
+    const [x, y] = point;
+    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+};
+
 module.exports = {
     getDocumentsByVideoId,
     filterOverlapsForVideo,
@@ -744,104 +844,4 @@ module.exports = {
 
         
     },
-};
-
-// Merge helper function for logical OR object spatial queries
-const mergeWindows = (windows) => {
-    if (windows.length === 0) return [];
-    
-    // Sort windows by start time
-    windows.sort((a, b) => new Date(`1970-01-01T${a.start_time}Z`) - new Date(`1970-01-01T${b.start_time}Z`));
-
-    const merged = [windows[0]];
-
-    for (let i = 1; i < windows.length; i++) {
-        const prev = merged[merged.length - 1];
-        const current = windows[i];
-
-        const prevEndTime = new Date(`1970-01-01T${prev.end_time}Z`);
-        const currentStartTime = new Date(`1970-01-01T${current.start_time}Z`);
-
-        if (currentStartTime <= prevEndTime) {
-            // Merge overlapping or contiguous windows
-            prev.end_time = new Date(Math.max(prevEndTime, new Date(`1970-01-01T${current.end_time}Z`)))
-                .toISOString()
-                .split('T')[1]
-                .slice(0, 12); // Keep only time with milliseconds
-        } else {
-            merged.push(current);
-        }
-    }
-
-    return merged;
-};
-
-// Helper to compute intersection of windows query objects logical AND
-const intersectWindows = (windowsList) => {
-    if (!windowsList || windowsList.length === 0) return [];
-
-    let intersection = windowsList[0]; // Start with the first object's windows
-
-    for (let i = 1; i < windowsList.length; i++) {
-        const current = windowsList[i];
-        const tempIntersection = [];
-
-        let j = 0, k = 0;
-
-        while (j < intersection.length && k < current.length) {
-            const start = Math.max(
-                new Date(`1970-01-01T${intersection[j].start_time}Z`),
-                new Date(`1970-01-01T${current[k].start_time}Z`)
-            );
-            const end = Math.min(
-                new Date(`1970-01-01T${intersection[j].end_time}Z`),
-                new Date(`1970-01-01T${current[k].end_time}Z`)
-            );
-
-            if (start < end) {
-                tempIntersection.push({
-                    start_time: new Date(start).toISOString().split('T')[1].slice(0, 12),
-                    end_time: new Date(end).toISOString().split('T')[1].slice(0, 12),
-                });
-            }
-
-            // Move the pointer with the earlier end time
-            if (
-                new Date(`1970-01-01T${intersection[j].end_time}Z`) <
-                new Date(`1970-01-01T${current[k].end_time}Z`)
-            ) {
-                j++;
-            } else {
-                k++;
-            }
-        }
-
-        intersection = tempIntersection; // Update with the latest intersection
-    }
-
-    return intersection;
-};
-
-// helper function for combinations of distinct instance types
-const getCombinations = (array, size) => {
-    if (size > array.length) return [];
-    const results = [];
-    const combination = (start, depth, prefix) => {
-        if (depth === 0) {
-            results.push(prefix);
-            return;
-        }
-        for (let i = start; i <= array.length - depth; i++) {
-            combination(i + 1, depth - 1, [...prefix, array[i]]);
-        }
-    };
-    combination(0, size, []);
-    return results;
-    
-}
-// Helper function to check if a point is within a defined region
-const isWithinRegion = (point, region) => {
-    const [x1, y1, x2, y2] = region;
-    const [x, y] = point;
-    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
 };

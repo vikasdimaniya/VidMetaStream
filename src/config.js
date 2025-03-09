@@ -29,11 +29,15 @@ const config = {
 
     // AWS S3 configuration
     s3: {
-        region: process.env.AWS_REGION || 'us-east-1',
+        region: process.env.AWS_REGION,
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        videoBucket: process.env.S3_VIDEO_BUCKET || 'vidmetastream-videos',
-        chunkBucket: process.env.S3_CHUNK_BUCKET || 'vidmetastream-chunks'
+        videoBucket: process.env.AWS_STORAGE_BUCKET_NAME,
+        chunkBucket: process.env.AWS_STORAGE_BUCKET_NAME,
+        endpoint: process.env.AWS_S3_ENDPOINT_URL,
+        forcePathStyle: process.env.AWS_S3_ADDRESSING_STYLE === 'path',
+        // Flag to determine if we're using MinIO instead of AWS S3
+        useMinIO: process.env.AWS_S3_ENDPOINT_URL ? true : false
     },
 
     // Video processing configuration

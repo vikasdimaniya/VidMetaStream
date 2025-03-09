@@ -5,7 +5,7 @@ from pymongo.mongo_client import MongoClient
 
 # Database configuration
 db_name = "vidmetastream"
-uri = f"mongodb+srv://Vikas:gPeAAonuG93l1WE8@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
+uri = f"mongodb+srv://localhost:27017/vidmetastream"
 try:
     # Create a MongoDB client
     client = MongoClient(uri)
