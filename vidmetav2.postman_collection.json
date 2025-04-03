@@ -1,0 +1,248 @@
+{
+	"info": {
+		"_postman_id": "98b9d80f-5b2f-43f6-97cc-6a1dd4cdb692",
+		"name": "vidmetav2",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "11631786",
+		"_collection_link": "https://takrino.postman.co/workspace/Team-Workspace~0aeb4ef0-b7b0-4b3b-80ed-685c07e31555/collection/11631786-98b9d80f-5b2f-43f6-97cc-6a1dd4cdb692?action=share&source=collection_link&creator=11631786",
+		"description": "VidMetaStream API collection for video metadata querying and analysis"
+	},
+	"item": [
+		{
+			"name": "paginated",
+			"item": [
+				{
+					"name": "Get paginated spatial objects",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Retrieves spatial objects with pagination support. Useful for handling large result sets of spatial queries."
+					},
+					"response": []
+				},
+				{
+					"name": "Get paginated instances",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Retrieves object instances with pagination support. Helps manage large sets of object instances."
+					},
+					"response": []
+				},
+				{
+					"name": "Stream large result sets",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Streams large result sets efficiently. Ideal for handling massive query results without memory constraints."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Standard Queries",
+			"item": [
+				{
+					"name": "Query videos containing specific objects",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Finds videos that contain specific objects. Supports optional time window for co-occurrence analysis."
+					},
+					"response": []
+				},
+				{
+					"name": "Query spatial objects",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Searches for objects within specified spatial areas in videos. Supports both coordinate-based and named areas."
+					},
+					"response": []
+				},
+				{
+					"name": "Query spatial objects with temporal constraints",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Finds objects within specific spatial areas during a particular time window in videos."
+					},
+					"response": []
+				},
+				{
+					"name": "Query spatial objects with logical AND",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Finds instances where all specified objects appear in the same area simultaneously."
+					},
+					"response": []
+				},
+				{
+					"name": "Query distinct instances of an object",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Retrieves all unique instances of a specific object type across videos."
+					},
+					"response": []
+				},
+				{
+					"name": "Query overlaps between instances of the same object",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Identifies time periods where multiple instances of the same object type overlap."
+					},
+					"response": []
+				},
+				{
+					"name": "Query instance overlaps in a specific area",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Finds overlapping instances of the same object type within a specified spatial area."
+					},
+					"response": []
+				},
+				{
+					"name": "Query instances at a specific time",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Retrieves all instances of an object at a particular timestamp in videos."
+					},
+					"response": []
+				},
+				{
+					"name": "Query for objects appearing in a specific sequence",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Finds instances where objects appear in a specified order within a time window."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "get video chunks",
+			"item": [
+				{
+					"name": "Get video chunks based on time windows",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Extracts video segments based on specified time windows. Returns metadata about available chunks."
+					},
+					"response": []
+				},
+				{
+					"name": "Download a specific video chunk",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Downloads a specific video chunk by its ID. Streams the video segment directly to the client."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "video crud",
+			"item": [
+				{
+					"name": "Get a specific video",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"description": "Retrieves metadata and information about a specific video by its ID.",
+						"url": {
+							"raw": "http://localhost:8000/video/67ccd7f9653aa62e8e33ee29",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"video",
+								"67ccd7f9653aa62e8e33ee29"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create a new video",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"description": "Creates a new video entry in the database with title and description. Returns the created video object.",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"dog truck and person\",\n    \"description\": \"Trip day\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost:8000/video",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"video"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload a video file",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"description": "Uploads a video file for a specific video ID. The video will be processed and stored in chunks.",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "movie",
+									"type": "file",
+									"src": "/Users/vikaskumar/Downloads/9354031-hd_1920_1080_30fps.mp4"
+								}
+							]
+						},
+						"url": {
+							"raw": "http://localhost:8000/upload/67ccd7f9653aa62e8e33ee29",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"upload",
+								"67ccd7f9653aa62e8e33ee29"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "batch query",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"description": "Executes multiple queries in a single request for improved performance."
+			},
+			"response": []
+		}
+	]
+}

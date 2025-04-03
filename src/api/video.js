@@ -1,11 +1,12 @@
-const fs = require('fs');
-const { pipeline } = require('stream');
-const { promisify } = require('util');
-const db = require('../db');
-const s3Service = require("../services/s3.js");
+import fs from 'fs';
+import { pipeline } from 'stream';
+import { promisify } from 'util';
+import db from '../db/index.js';
+import { s3Service } from '../services/s3.js';
+
 const pump = promisify(pipeline);
 
-module.exports = {
+export const videoAPIs = {
     /**
      * Get a list of all videos
      * This will return a list of all videos in the database
@@ -130,4 +131,4 @@ module.exports = {
             reply.code(500).send({ message: 'Server error while processing upload notification' });
         }
     }
-}
+};
