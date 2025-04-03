@@ -1,8 +1,8 @@
-require('dotenv').config();
+import 'dotenv/config';
 console.log("AWS_REGION:", process.env.AWS_REGION);
 console.log('MONGODB_URI from env:', process.env.MONGODB_URI);
-const mongoose = require('mongoose');
-const { S3Client } = require('@aws-sdk/client-s3');
+import mongoose from 'mongoose';
+import { S3Client } from '@aws-sdk/client-s3';
 
 // Configure S3 client to use MinIO
 const s3Client = new S3Client({
@@ -41,7 +41,7 @@ async function initMongo() {
     }
 }
 
-module.exports = {
+export default {
     initMongo,
     getDb: () => db,
     getGridFSBucket: () => gridFSBucket,

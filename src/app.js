@@ -1,10 +1,9 @@
 import Fastify from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCors from '@fastify/cors';
-import videoRoutes from './src/routes/video.js';
-import db from './src/db/index.js';
+import { videoAPIs } from './api/video.js';
+import db from './db/index.js';
 import dotenv from 'dotenv';
-import { mcpServer } from './src/mcp-server.js';
 
 dotenv.config();
 
@@ -22,19 +21,19 @@ fastify.register(fastifyCors, {
 await db.connectDB();
 
 // Register routes
-await videoRoutes(fastify);
+fastify.get('/video/:video_id', videoAPIs.getVideo);
+fastify.post('/video', videoAPIs.createVideo);
+fastify.post('/upload/:video_id', videoAPIs.uploadVideo);
 
 // Start the server
 const start = async () => {
     try {
-        await fastify.listen({ port: process.env.PORT || 8000, host: '0.0.0.0' });
-        console.log(`API server running on port ${process.env.PORT || 8000}`);
-        
-        // MCP server is already connected via StdioServerTransport in mcp-server.js
+        await fastify.listen({ port: process.env.PORT || 3000, host: '0.0.0.0' });
+        console.log(`Server is running on ${fastify.server.address().port}`);
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
     }
 };
 
-start();
+start(); 

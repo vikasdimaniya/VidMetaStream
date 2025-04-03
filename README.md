@@ -27,6 +27,9 @@ VidMetaStream provides a comprehensive API for querying video metadata. The syst
 - Analyze object instances and their overlaps
 - Extract video chunks based on query results
 
+## Local Development steps
+**start minio:**
+minio server --console-address ":9001" ~/minio-data ~/vidmetastream-minio
 ## API Endpoints
 
 ### Object Queries
