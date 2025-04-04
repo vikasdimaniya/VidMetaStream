@@ -13,6 +13,8 @@ from tqdm import tqdm
 import boto3
 from botocore.config import Config as BotoCoreConfig
 from dotenv import load_dotenv
+import supervision as sv
+from inference.models.yolo_world.yolo_world import YOLOWorld
 
 # Add the project root to Python path when running directly
 if __name__ == "__main__":
@@ -21,7 +23,6 @@ if __name__ == "__main__":
 
 from ML.utils.connections import objects_collection, get_database, get_s3_client
 from ML.utils.logging_config import setup_logging, get_logger
-from ultralytics import YOLO  # Direct YOLO import for the model
 
 # Set up logging
 setup_logging(log_file='logs/video_processing.log')
@@ -64,7 +65,7 @@ class VideoProcessor:
     Video processor for object detection and tracking
     """
     
-    def __init__(self, model_name: str = "yolo", model_path: Optional[str] = None, 
+    def __init__(self, model_name: str = "yolo_world", model_path: Optional[str] = None, 
                  device: str = "cpu", confidence_threshold: float = 0.25, 
                  timeout_threshold: int = 2000, iou_threshold: float = 0.3,
                  **kwargs: Any) -> None:
@@ -80,13 +81,25 @@ class VideoProcessor:
             iou_threshold: IoU threshold for tracking
             **kwargs: Additional model-specific parameters
         """
-        # Direct YOLO model initialization
-        if model_path:
-            self.model = YOLO(model_path)
-        else:
-            self.model = YOLO('yolov8n.pt')  # Default model
+        # Initialize YOLO-World model
+        self.model = YOLOWorld(model_id="yolo_world/l")
         
-        logger.info(f"Loaded model with classes: {self.model.names}")
+        # Load custom classes
+        classes_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "classes.csv")
+        try:
+            with open(classes_path, "r") as f:
+                self.class_list = [line.strip() for line in f if line.strip()]
+            
+            # Set custom classes
+            self.model.set_classes(self.class_list)
+            logger.info(f"Loaded {len(self.class_list)} custom classes for YOLO-World model")
+        except Exception as e:
+            logger.error(f"Failed to load custom classes: {str(e)}")
+            
+        # Initialize annotators
+        self.box_annotator = sv.BoxAnnotator(thickness=2)
+        self.label_annotator = sv.LabelAnnotator()
+        
         self.device = device
         self.confidence_threshold = confidence_threshold
         
@@ -145,25 +158,29 @@ class VideoProcessor:
                 if not ret:
                     break
 
-                # Run object detection
-                results = self.model.predict(frame, device=self.device, verbose=False)
+                # Run object detection with YOLO-World
+                results = self.model.infer(frame)
+                
+                # Convert results to supervision Detections
+                detections = sv.Detections.from_inference(results)
                 
                 # Extract frame timestamp
                 timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
                 timestamp = convert_ms_to_timestamp(timestamp_ms)
 
                 # Process detections
-                for result in results:
-                    for box in result.boxes:
+                if len(detections) > 0:
+                    for i in range(len(detections)):
                         # Extract object data
-                        box_coordinates = box.xyxy[0].tolist()
-                        label = self.model.names[int(box.cls[0])]
-                        confidence = float(box.conf[0])
+                        confidence = float(detections.confidence[i])
                         
                         # Skip low confidence detections
                         if confidence < self.confidence_threshold:
                             continue
                             
+                        box_coordinates = detections.xyxy[i].tolist()
+                        label = detections.data.get('class_name', [])[i] if 'class_name' in detections.data else "unknown"
+                        
                         relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
 
                         logger.debug(
@@ -238,7 +255,7 @@ class VideoProcessor:
                             logger.info(f"Created new instance ID {instance_id} for label '{label}'")
 
                 # Annotate the frame with bounding boxes and labels
-                annotated_frame = self.annotate_frame(frame, results, frame_width, frame_height)
+                annotated_frame = self.annotate_frame(frame, detections)
 
                 # Write the annotated frame to the output video
                 out.write(annotated_frame)
@@ -265,39 +282,37 @@ class VideoProcessor:
         
         return annotated_video_path
     
-    def annotate_frame(self, frame, results, frame_width, frame_height):
+    def annotate_frame(self, frame, detections):
         """
-        Draw bounding boxes and labels on the frame based on detection results.
+        Draw bounding boxes and labels on the frame based on detection results using supervision.
         """
-        for result in results:
-            for box in result.boxes:
-                # Skip low confidence detections
-                confidence = float(box.conf[0])
-                if confidence < self.confidence_threshold:
-                    continue
-                    
-                # Extract object data
-                box_coordinates = box.xyxy[0].tolist()
-                label = self.model.names[int(box.cls[0])]
-
-                x1, y1, x2, y2 = map(int, box_coordinates)
-
-                # Draw bounding box
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color=(0, 255, 0), thickness=2)
-
-                # Prepare label with confidence
-                label_text = f"{label} {confidence:.2f}"
-
-                # Calculate position for label
-                (text_width, text_height), baseline = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(frame, (x1, y1 - text_height - baseline), (x1 + text_width, y1), color=(0, 255, 0), thickness=-1)
-                cv2.putText(frame, label_text, (x1, y1 - baseline), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        # Generate labels for each detection
+        labels = [
+            f"{detections.data['class_name'][i]} {detections.confidence[i]:.2f}"
+            for i in range(len(detections)) if detections.confidence[i] >= self.confidence_threshold
+        ]
         
-        return frame
+        # Filter detections based on confidence threshold
+        mask = detections.confidence >= self.confidence_threshold
+        filtered_detections = detections[mask]
+        filtered_labels = [labels[i] for i, include in enumerate(mask) if include]
+        
+        # Annotate frame with bounding boxes
+        annotated_frame = self.box_annotator.annotate(scene=frame.copy(), detections=filtered_detections)
+        
+        # Annotate frame with labels
+        if len(filtered_detections) > 0:
+            annotated_frame = self.label_annotator.annotate(
+                scene=annotated_frame, 
+                detections=filtered_detections, 
+                labels=filtered_labels
+            )
+        
+        return annotated_frame
     
     def extract_detections(self, results, frame_width, frame_height):
         """
-        Extract detections from model results
+        Extract detections from YOLO-World model results
         
         Args:
             results: Model prediction results
@@ -307,32 +322,34 @@ class VideoProcessor:
         Returns:
             List of detections with their details
         """
-        detections = []
+        # Convert results to supervision Detections
+        detections = sv.Detections.from_inference(results)
         
-        for result in results:
-            for box in result.boxes:
-                confidence = float(box.conf[0])
+        extracted_detections = []
+        
+        for i in range(len(detections)):
+            confidence = float(detections.confidence[i])
+            
+            # Skip low confidence detections
+            if confidence < self.confidence_threshold:
+                continue
                 
-                # Skip low confidence detections
-                if confidence < self.confidence_threshold:
-                    continue
-                    
-                box_coordinates = box.xyxy[0].tolist()
-                label = self.model.names[int(box.cls[0])]
-                relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
-                
-                detections.append({
-                    "class": label,
-                    "confidence": confidence,
-                    "box": box_coordinates,
-                    "relative_position": relative_position
-                })
-                
-        return detections
+            box_coordinates = detections.xyxy[i].tolist()
+            label = detections.data.get('class_name', [])[i] if 'class_name' in detections.data else "unknown"
+            relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
+            
+            extracted_detections.append({
+                "class": label,
+                "confidence": confidence,
+                "box": box_coordinates,
+                "relative_position": relative_position
+            })
+            
+        return extracted_detections
     
     def predict(self, frame):
         """
-        Run object detection on a single frame
+        Run object detection on a single frame using YOLO-World
         
         Args:
             frame: Input frame
@@ -340,7 +357,7 @@ class VideoProcessor:
         Returns:
             Detection results
         """
-        return self.model.predict(frame, device=self.device, verbose=False)
+        return self.model.infer(frame)
 
 
 # Helper functions
