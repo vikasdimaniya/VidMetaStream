@@ -68,6 +68,10 @@ export default function VideoUploader() {
             setProgress(percentCompleted);
           },
         });
+        
+        // Step 2.5: Notify the backend that the direct S3 upload is complete
+        console.log(`Notifying backend that upload is complete via ${API_ROUTES.NOTIFY_UPLOAD_COMPLETE(video._id)}`);
+        await axios.post(API_ROUTES.NOTIFY_UPLOAD_COMPLETE(video._id));
       } else {
         // For server upload
         console.log(`Uploading via server at ${API_ROUTES.UPLOAD_VIDEO(video._id)}`);
@@ -89,6 +93,7 @@ export default function VideoUploader() {
             },
           }
         );
+        // No need to notify for server uploads as the server already updates the status
       }
 
       // Step 3: Get the updated video info

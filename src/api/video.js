@@ -86,5 +86,48 @@ module.exports = {
         // remove the temp file
         fs.unlinkSync(video.uploadTempLocation);
         return { message: 'files uploaded' };
+    },
+
+    /**
+     * Notifies the server that a direct S3 upload is complete
+     * This updates the video status to 'uploaded' so that processing can begin
+     * This endpoint should be called by the frontend after completing a direct upload to S3
+     */
+    notifyUploadComplete: async (req, reply) => {
+        if (!req.params.video_id) {
+            reply.code(400).send({ message: 'No video id provided' });
+            return;
+        }
+
+        try {
+            // Verify the video exists
+            const video = await db.video.findById(req.params.video_id);
+            if (!video) {
+                reply.code(404).send({ message: 'Video not found' });
+                return;
+            }
+
+            // Optional: Verify the file exists in S3 before updating status
+            try {
+                await s3Service.checkFileExists(process.env.AWS_STORAGE_BUCKET_NAME, req.params.video_id);
+            } catch (error) {
+                console.error('Error verifying file in S3:', error);
+                reply.code(400).send({ message: 'Video file not found in storage. Upload may not be complete.' });
+                return;
+            }
+
+            // Update the video status
+            video.status = 'uploaded';
+            await video.save();
+
+            return { 
+                message: 'Upload notification received. Video processing will begin soon.',
+                video_id: video._id,
+                status: video.status
+            };
+        } catch (error) {
+            console.error('Error in notifyUploadComplete:', error);
+            reply.code(500).send({ message: 'Server error while processing upload notification' });
+        }
     }
 }

@@ -71,12 +71,49 @@ def find_and_update_task():
                     
                     # Pass the absolute path to the processing module
                     if vid_path:
-                        process_video(vid_path)
-                        #s3_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{s3_key}"
-                        #save_video_objects(vid_path, metadata, s3_url)
-                        print("Video processed and metadata saved.")
+                        try:
+                            process_video(vid_path)
+                            
+                            # Update the video status to "analized" after processing
+                            collection.update_one(
+                                {"_id": result.get("_id")},
+                                {"$set": {"status": "analized"}}
+                            )
+                            print(f"Updated video status to 'analized' for video ID: {s3_key}")
+                            print("Video processed and metadata saved.")
+                        except Exception as processing_error:
+                            print(f"Error processing video: {processing_error}")
+                            # Update the video status to "error" if processing fails
+                            collection.update_one(
+                                {"_id": result.get("_id")},
+                                {
+                                    "$set": {
+                                        "status": "error",
+                                        "error": str(processing_error)
+                                    }
+                                }
+                            )
+                            print(f"Updated video status to 'error' for video ID: {s3_key}")
+                        finally:
+                            # Clean up temporary files
+                            try:
+                                if os.path.exists(vid_path):
+                                    os.remove(vid_path)
+                                    print(f"Removed temporary file: {vid_path}")
+                            except Exception as cleanup_error:
+                                print(f"Error cleaning up temporary files: {cleanup_error}")
                     else:
                         print(f"Skipping processing for {s3_key} due to download failure.")
+                        # Mark the video as error since download failed
+                        collection.update_one(
+                            {"_id": result.get("_id")},
+                            {
+                                "$set": {
+                                    "status": "error",
+                                    "error": "Failed to download video from S3"
+                                }
+                            }
+                        )
                 else:
                     print("No S3 key found in the document.")
             else:

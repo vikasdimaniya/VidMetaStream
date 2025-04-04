@@ -9,7 +9,7 @@ const videoSchema = new mongoose.Schema({
     error: Object,
     status: {
         type: String,
-        enum: ['created', 'uploaded', 'analyzing', 'analized', 'fragmenting', 'fragmented', 'ready', 'error'],
+        enum: ['created', 'uploaded', 'analyzing', 'analyzed', 'fragmenting', 'fragmented', 'ready', 'error'],
         default: 'created'
     }
 });

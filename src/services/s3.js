@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand, GetObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand } = require("@aws-sdk/client-s3");
+const { S3Client, PutObjectCommand, GetObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const fs = require('fs');
 const { pipeline } = require('stream');
@@ -133,10 +133,32 @@ async function uploadLargeVideoFile(bucketName, key, filePath) {
     console.log("File uploaded:", key, response);
 }
 
+/**
+ * Check if a file exists in the S3 bucket
+ * @param {string} bucketName - The S3 bucket name.
+ * @param {string} key - The object key (e.g., filename).
+ * @returns {Promise<boolean>} - Resolves to true if the file exists, throws an error otherwise.
+ */
+async function checkFileExists(bucketName, key) {
+    try {
+        const command = new HeadObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+        });
+
+        await core.s3Client.send(command);
+        return true; // File exists
+    } catch (error) {
+        console.error(`Error checking if file ${key} exists in ${bucketName}:`, error);
+        throw new Error(`File ${key} does not exist in bucket ${bucketName}`);
+    }
+}
+
 module.exports = {
     getUploadSignedUrl,
     uploadVideo,
     uploadVideoStream,
     uploadLargeVideoFile,
-    downloadVideo
+    downloadVideo,
+    checkFileExists
 };

@@ -28,6 +28,7 @@ This project presents a novel video querying system that addresses the challenge
 - [Challenges and Limitations](#challenges-and-limitations)
 - [Future Work](#future-work)
 - [Acknowledgments](#acknowledgments)
+- [API Documentation](#api-documentation)
 
 ---
 
@@ -187,6 +188,55 @@ AWS_SECRET_ACCESS_KEY=your-secret-key
 AWS_STORAGE_BUCKET_NAME=your-bucket-name
 AWS_S3_ADDRESSING_STYLE=path
 ```
+
+---
+
+## API Documentation
+
+### Video Upload Flow
+
+The video upload process in this system can follow two paths:
+
+1. **Server-Mediated Upload**:
+   ```
+   POST /upload/:video_id
+   ```
+   The video file is first uploaded to the server, which then transfers it to S3/MinIO.
+   The server automatically sets the video status to 'uploaded'.
+
+2. **Direct S3 Upload**:
+   ```
+   POST /video                          # Create video entry and get signed URL
+   PUT <signed_s3_url>                  # Frontend directly uploads to S3
+   POST /video/:video_id/upload-complete # Frontend notifies backend when upload is complete
+   ```
+   After creating the video record, the frontend uploads directly to S3 using a pre-signed URL,
+   then notifies the backend once the upload is complete.
+
+The second approach is preferable for large files as it:
+- Reduces server load
+- Reduces bandwidth costs
+- Provides better upload performance
+
+### API Endpoints
+
+- **Create Video**
+  - `POST /video`
+  - Creates a new video record with metadata
+  - Returns the video ID and a signed upload URL for direct S3 upload
+
+- **Upload Video (Server-Mediated)**
+  - `POST /upload/:video_id`
+  - Uploads a video file to the server, which transfers it to S3
+
+- **Notify Upload Complete**
+  - `POST /video/:video_id/upload-complete`
+  - Notifies the backend that a direct S3 upload is complete
+  - Updates the video status to 'uploaded' to trigger processing
+
+- **Get Video**
+  - `GET /video/:video_id`
+  - Retrieves video information, including processing status
 
 ---
 
