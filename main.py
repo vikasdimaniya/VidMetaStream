@@ -21,6 +21,7 @@ db_name = "vidmetastream"
 print(f"Connecting to MongoDB at: {mongodb_uri}")
 client = MongoClient(mongodb_uri)
 db = client[db_name]
+print(f"Connected to MongoDB")
 collection = db["videos"]
 
 s3 = boto3.client(
@@ -78,6 +79,7 @@ def find_and_update_task():
                 else:
                     print("No S3 key found in the document.")
             else:
+                print("No documents found with status 'uploaded' waiting for 2 seconds.")
                 time.sleep(2)
 
         except Exception as e:
