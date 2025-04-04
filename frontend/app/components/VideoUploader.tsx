@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, FormEvent } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { API_ROUTES } from '../constants/api';
 import { CreateVideoResponse, Video } from '../interfaces/video';
 
@@ -40,6 +40,7 @@ export default function VideoUploader() {
     
     try {
       // Step 1: Create video entry in database
+      console.log(`Attempting to create video entry at ${API_ROUTES.CREATE_VIDEO}`);
       const createResponse = await axios.post<CreateVideoResponse>(
         API_ROUTES.CREATE_VIDEO,
         {
@@ -50,10 +51,12 @@ export default function VideoUploader() {
       );
 
       const { video, upload_url } = createResponse.data;
+      console.log('Video entry created:', video);
       
       // Step 2: Upload the video file
       if (upload_url) {
         // For S3 direct upload
+        console.log(`Uploading to S3 via signed URL: ${upload_url}`);
         await axios.put(upload_url, file, {
           headers: {
             'Content-Type': file.type,
@@ -67,6 +70,7 @@ export default function VideoUploader() {
         });
       } else {
         // For server upload
+        console.log(`Uploading via server at ${API_ROUTES.UPLOAD_VIDEO(video._id)}`);
         const formData = new FormData();
         formData.append('file', file);
         
@@ -88,6 +92,7 @@ export default function VideoUploader() {
       }
 
       // Step 3: Get the updated video info
+      console.log(`Fetching updated video info from ${API_ROUTES.GET_VIDEO(video._id)}`);
       const videoResponse = await axios.get<Video>(API_ROUTES.GET_VIDEO(video._id));
       setUploadedVideo(videoResponse.data);
       
@@ -100,7 +105,20 @@ export default function VideoUploader() {
       }
     } catch (err) {
       console.error('Upload error:', err);
-      setError('An error occurred during upload. Please try again.');
+      
+      if (axios.isAxiosError(err)) {
+        const axiosError = err as AxiosError;
+        
+        if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ERR_NETWORK') {
+          setError('Unable to connect to the server. Please make sure the server is running at the correct address (port 8000).');
+        } else if (axiosError.response) {
+          setError(`Server error: ${axiosError.response.status} ${axiosError.response.statusText}`);
+        } else {
+          setError(`Network error: ${axiosError.message}`);
+        }
+      } else {
+        setError('An unexpected error occurred during upload. Please try again.');
+      }
     } finally {
       setIsUploading(false);
     }

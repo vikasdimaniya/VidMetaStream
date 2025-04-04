@@ -181,9 +181,11 @@ If both are provided, the direct URI method takes precedence.
 Configure AWS S3 in your `.env` file:
 ```
 AWS_REGION=your-region
-AWS_ACCESS_KEY=your-access-key
+AWS_S3_ENDPOINT_URL=http://localhost:9000
+AWS_ACCESS_KEY_ID=your-access-key-id
 AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_BUCKET_NAME=your-bucket-name
+AWS_STORAGE_BUCKET_NAME=your-bucket-name
+AWS_S3_ADDRESSING_STYLE=path
 ```
 
 ---

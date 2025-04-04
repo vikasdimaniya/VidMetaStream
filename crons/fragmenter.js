@@ -33,7 +33,7 @@ async function start() {
         if (!fs.existsSync("temp/downloads/")) {
             fs.mkdirSync("temp/downloads/", { recursive: true });
         }
-        let downloaded = await S3Service.downloadVideo(process.env.AWS_BUCKET_NAME, video._id.toString(), downloadPath);
+        let downloaded = await S3Service.downloadVideo(process.env.AWS_STORAGE_BUCKET_NAME, video._id.toString(), downloadPath);
         const inputFilePath = downloadPath; // Path to the input video file
         const outputDir = 'temp/fragmented/' + video._id + "/"; // Path to output directory for chunks
 
