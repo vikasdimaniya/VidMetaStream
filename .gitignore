@@ -142,3 +142,5 @@ fragmented/
 downloads
 downloads/
 downloads/*.DS_Store
+
+*.pyc

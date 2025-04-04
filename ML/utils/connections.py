@@ -4,6 +4,7 @@ Shared connections module for MongoDB and S3/MinIO
 import os
 from typing import Optional, Dict, Any, Union
 import boto3
+from botocore.config import Config as BotoCoreConfig
 from pymongo import MongoClient
 from ML.utils.config import config
 from ML.utils.logging_config import get_logger
@@ -12,25 +13,37 @@ from ML.utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 # MongoDB connection
+print("config.MONGODB_URI: ", config.MONGODB_URI)
+print("config.DB_NAME: ", config.DB_NAME)
 mongo_client = MongoClient(config.MONGODB_URI)
 db = mongo_client[config.DB_NAME]
 
 # S3/MinIO client
 s3_config = config.get_s3_config()
+
+# Create proper boto3 Config object if config is provided
+boto_config = None
+if s3_config.get("config"):
+    s3_conf = s3_config.get("config")
+    boto_config = BotoCoreConfig(
+        signature_version=s3_conf.get("signature_version", "s3v4"),
+        s3=s3_conf.get("s3", {})
+    )
+
 s3_client = boto3.client(
     "s3",
     endpoint_url=s3_config.get("endpoint_url"),
     aws_access_key_id=s3_config["aws_access_key_id"],
     aws_secret_access_key=s3_config["aws_secret_access_key"],
     region_name=s3_config["region_name"],
-    config=s3_config.get("config")
+    config=boto_config
 )
 
 # Export collections for easy access
 videos_collection = db["videos"]
 objects_collection = db["objects"]
 
-def get_mongo_db():
+def get_database():
     """Get the MongoDB database instance"""
     return db
 

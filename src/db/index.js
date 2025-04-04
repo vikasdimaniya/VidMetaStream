@@ -13,5 +13,5 @@ const connectDB = async () => {
 
 export default {
     connectDB,
-    video: Video
+    videos: Video
 };
