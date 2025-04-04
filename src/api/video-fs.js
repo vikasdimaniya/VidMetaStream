@@ -17,7 +17,7 @@ module.exports = {
             return;
         }
 
-        return db.video.findById(req.params.video_id);
+        return db.videos.findById(req.params.video_id);
     },
 
     /**
@@ -25,7 +25,7 @@ module.exports = {
      * After this you have to call post /upload/:video_id to upload the video file
      */
     createVideo: async (req, reply) => {
-        let video = new db.video({
+        let video = new db.videos({
             title: req.body.title,
             description: req.body.description,
             filename: req.body.filename
@@ -53,7 +53,7 @@ module.exports = {
             reply.code(400).send({ message: 'No video id provided' });
             return;
         }
-        const video = await db.video.findById(req.params.video_id);
+        const video = await db.videos.findById(req.params.video_id);
         if (!video) {
             reply.code(404).send({ message: 'Video not found' });
             return;
