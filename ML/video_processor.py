@@ -547,15 +547,25 @@ def process_videos_from_queue():
                     annotated_video_name += '.mp4v'
                 else:
                     annotated_video_name += '.mp4'
-                    
-            s3_url = upload_to_s3(annotated_video_path, BUCKET_NAME, annotated_video_name)
             
-            # Update the video status to 'analyzed'
+            # Make sure the S3 client exists before trying to upload        
+            if s3_client is None:
+                logger.error("Cannot upload to S3: S3 client is not available")
+                s3_url = None
+            else:
+                try:
+                    s3_url = upload_to_s3(annotated_video_path, BUCKET_NAME, annotated_video_name)
+                    logger.info(f"Uploaded annotated video to S3: {s3_url}")
+                except Exception as e:
+                    logger.error(f"Failed to upload to S3: {str(e)}")
+                    s3_url = None
+            
+            # Update the video status to 'analyzed' even if S3 upload failed
             video_collection.update_one(
                 {"_id": video['_id']},
                 {"$set": {
                     "status": "analyzed",
-                    "annotated_video_url": s3_url
+                    "annotated_video_url": s3_url or annotated_video_path  # Use local path if S3 upload failed
                 }}
             )
             

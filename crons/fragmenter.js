@@ -49,7 +49,8 @@ async function start() {
         let x = await chunkStorage.uploadAllFilesToGridfs(gridFSBucket, video._id, outputDir, timestamps);
         console.log(x);
         try {
-            fs.rmdirSync(outputDir, { recursive: true });
+            // Use fs.rm instead of deprecated fs.rmdir with recursive flag
+            fs.rmSync(outputDir, { recursive: true, force: true });
             fs.unlinkSync(inputFilePath);
         } catch (error) {
             console.error('Error deleting files:', error);
