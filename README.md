@@ -155,4 +155,37 @@ Special thanks to:
 
 ---
 
+## Configuration
+
+### MongoDB Configuration
+You can configure the MongoDB connection in two ways:
+
+1. **Direct URI Method**:
+   Set the complete MongoDB URI in your `.env` file:
+   ```
+   MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-name>.<identifier>.mongodb.net/<database>?retryWrites=true&w=majority
+   ```
+
+2. **Component Method**:
+   Set the individual components in your `.env` file:
+   ```
+   MONGO_USERNAME=your_mongo_username
+   MONGO_PASSWORD=your_mongo_password
+   MONGO_CLUSTER=your_cluster_name (default: adtcluster)
+   MONGO_REGION=your_region_id (default: d1cdf)
+   ```
+
+If both are provided, the direct URI method takes precedence.
+
+### AWS S3 Configuration
+Configure AWS S3 in your `.env` file:
+```
+AWS_REGION=your-region
+AWS_ACCESS_KEY=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_BUCKET_NAME=your-bucket-name
+```
+
+---
+
 Enjoy exploring your video datasets!

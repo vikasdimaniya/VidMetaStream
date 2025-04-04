@@ -9,16 +9,17 @@ import boto3
 
 load_dotenv()
 
-mongo_user_name = os.getenv("MONGO_USERNAME")
-mongo_password = os.getenv("MONGO_PASSWORD")
+# Get MongoDB connection info from environment variables
+mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/vidmetastream")
 AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.getenv("AWS_REGION")
-BUCKET_NAME = "adtbucket"
+BUCKET_NAME = os.getenv("AWS_BUCKET_NAME", "adtbucket")
 db_name = "vidmetastream"
 
-uri = f"mongodb+srv://{mongo_user_name}:{mongo_password}@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
-client = MongoClient(uri)
+# Connect to MongoDB
+print(f"Connecting to MongoDB at: {mongodb_uri}")
+client = MongoClient(mongodb_uri)
 db = client[db_name]
 collection = db["videos"]
 
@@ -26,7 +27,7 @@ s3 = boto3.client(
     "s3",
     aws_access_key_id=AWS_ACCESS_KEY,
     aws_secret_access_key=AWS_SECRET_KEY,
-    region_name= AWS_REGION  # Replace with your actual region
+    region_name=AWS_REGION
 )
 
 # Function to download a file from S3
