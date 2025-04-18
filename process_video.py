@@ -15,6 +15,9 @@ import boto3
 import logging
 from pymongo.mongo_client import MongoClient
 from datetime import datetime
+from skimage.metrics import structural_similarity as ssim
+import numpy as np
+from sort_tracker import Sort
 
 # Load environment variables
 load_dotenv()
@@ -80,39 +83,33 @@ logging.getLogger().addHandler(file_handler)
 def process_video(video_path):
     cap = cv2.VideoCapture(video_path)
     frame_number = 0
-
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
-    # Get frame dimensions
     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-    # Get Frames Per Second (FPS)
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps == 0:
-        fps = 30  # Default to 30 if FPS is not available
-
-    # Initialize VideoWriter to save the annotated video
+        fps = 30
     video_name = os.path.basename(video_path)
     annotated_video_name = f"annotated_{video_name}"
     annotated_video_path = os.path.join(os.path.dirname(video_path), annotated_video_name)
-
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for MP4
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(annotated_video_path, fourcc, fps, (frame_width, frame_height))
     logging.info(f"Initialized VideoWriter for annotated video at {annotated_video_path}")
+    objects_collection = collection
 
-    # MongoDB collections
-    objects_collection = collection  # New collection for object presence
+    # SSIM-based keyframe extraction
+    ssim_threshold = 0.90
+    prev_keyframe_gray = None
+    prev_keyframe_num = 0
+    prev_keyframe_boxes = None
+    prev_keyframe_tracks = None
+    prev_keyframe_timestamp = None
 
-    # Temporary in-memory tracker for active objects
-    # Format: {object_name: [{"instance_id": str, "last_frame": int, "last_timestamp_ms": float, "last_box": list}, ...]}
-    active_objects = {}
-
-    # Timeout threshold in milliseconds (e.g., 2 seconds)
-    timeout_threshold = 2000  
-
-    # IoU threshold for associating detections with existing tracked objects
-    iou_threshold = 0.3
+    # SORT tracker
+    sort_tracker = Sort()
+    tracks_per_frame = {}
+    boxes_per_frame = {}
+    frame_timestamps = {}
 
     with tqdm(total=total_frames, desc=f"Processing {video_name}", unit="frame") as pbar:
         while cap.isOpened():
@@ -120,114 +117,90 @@ def process_video(video_path):
             if not ret:
                 break
 
-            # Run object detection
-            results = model.predict(frame, device="cpu", verbose=False)
-            
-            # Extract frame timestamp
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-            timestamp = convert_ms_to_timestamp(timestamp_ms)  # Now includes milliseconds
+            timestamp = convert_ms_to_timestamp(timestamp_ms)
+            frame_timestamps[frame_number] = timestamp
 
-            for result in results:
-                for box in result.boxes:
-                    # Extract object data
-                    box_coordinates = box.xyxy[0].tolist()
-                    label = model.names[int(box.cls[0])]
-                    confidence = float(box.conf[0])
-                    relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
+            if prev_keyframe_gray is None:
+                is_keyframe = True
+            else:
+                score, _ = ssim(prev_keyframe_gray, gray, full=True)
+                is_keyframe = score < ssim_threshold
 
-                    logging.info(
-                        f"Frame {frame_number}: Detected {label} with confidence {confidence:.2f}, "
-                        f"Box: {box_coordinates}, Relative Position: {relative_position}"
-                    )
-
-                    # Initialize the list for this label if not present
-                    if label not in active_objects:
-                        active_objects[label] = []
-
-                    matched_instance = None
-                    max_iou = 0
-
-                    # Iterate over existing active instances of this label to find a match
-                    for obj in active_objects[label]:
-                        iou = compute_iou(box_coordinates, obj["last_box"])
-                        if iou > iou_threshold and iou > max_iou:
-                            max_iou = iou
-                            matched_instance = obj
-
-                    if matched_instance:
-                        # Update existing instance
-                        matched_instance["last_frame"] = frame_number
-                        matched_instance["last_timestamp_ms"] = timestamp_ms
-                        matched_instance["last_box"] = box_coordinates
-                        matched_instance["end_time"] = timestamp_to_seconds(timestamp)  # Update end_time
-
-                        # Add frame data to MongoDB
-                        objects_collection.update_one(
-                            {"_id": matched_instance["instance_id"]},
-                            {"$push": {"frames": {
-                                "frame": frame_number,
-                                "timestamp": timestamp,  # Now includes milliseconds
-                                "box": box_coordinates,
-                                "relative_position": relative_position,
-                                "confidence": confidence
-                            }},
-                            "$set": {"end_time": timestamp_to_seconds(timestamp)}  # Update end_time
-                            }
-                        )
-                    else:
-                        # Create a new instance
-                        instance_id = str(uuid.uuid4())  # Unique identifier for the new instance
-                        new_instance = {
-                            "instance_id": instance_id,
-                            "last_frame": frame_number,
-                            "start_time": timestamp_to_seconds(timestamp),  # Set start_time
-                            "end_time": timestamp_to_seconds(timestamp),    # Initialize end_time
-                            "last_timestamp_ms": timestamp_ms,
-                            "last_box": box_coordinates
-                        }
-                        active_objects[label].append(new_instance)
-
-                        # Create a new document in MongoDB for this instance
-                        new_doc = {
-                            "_id": instance_id,
+            if is_keyframe:
+                prev_keyframe_gray = gray
+                prev_keyframe_num = frame_number
+                prev_keyframe_timestamp = timestamp
+                # Run detection
+                results = model.predict(frame, device="cpu", verbose=False)
+                dets = []
+                for result in results:
+                    for box in result.boxes:
+                        box_coordinates = box.xyxy[0].tolist()
+                        dets.append(box_coordinates)
+                dets = np.array(dets) if len(dets) > 0 else np.empty((0,4))
+                # Update SORT
+                tracked = sort_tracker.update(dets)
+                tracks_per_frame[frame_number] = tracked.copy() if tracked is not None else np.empty((0,5))
+                boxes_per_frame[frame_number] = dets.copy() if dets is not None else np.empty((0,4))
+                # Annotate and write
+                annotated_frame = frame.copy()
+                for trk in tracked:
+                    x1, y1, x2, y2, track_id = trk.astype(int)
+                    cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0,255,0), 2)
+                    cv2.putText(annotated_frame, f'ID:{track_id}', (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 2)
+                out.write(annotated_frame)
+                # Save to MongoDB
+                for trk in tracked:
+                    x1, y1, x2, y2, track_id = trk.tolist()
+                    objects_collection.update_one(
+                        {"_id": f"{video_name}_{track_id}"},
+                        {"$push": {"frames": {
+                            "frame": frame_number,
+                            "timestamp": timestamp,
+                            "box": [x1, y1, x2, y2],
+                            "confidence": None,
+                            "interpolated": False
+                        }}, "$setOnInsert": {
+                            "_id": f"{video_name}_{track_id}",
                             "video_id": video_name,
-                            "object_name": label,
-                            "start_time": timestamp_to_seconds(timestamp), 
-                            "end_time": timestamp_to_seconds(timestamp),    # Initialize end_time # Set start_time
-                            "frames": [{
-                                "frame": frame_number,
-                                "timestamp": timestamp,  # Now includes milliseconds
-                                "box": box_coordinates,
-                                "relative_position": relative_position,
-                                "confidence": confidence
-                            }]
-                        }
-                        objects_collection.insert_one(new_doc)
-
-                        logging.info(f"Created new instance ID {instance_id} for label '{label}'")
-
-            # Annotate the frame with bounding boxes and labels
-            annotated_frame = annotate_frame(frame, results, frame_width, frame_height)
-
-            # Write the annotated frame to the output video
-            out.write(annotated_frame)
-
-            # Remove expired objects (based on timeout threshold)
-            for label, instances in list(active_objects.items()):
-                active_objects[label] = [
-                    obj for obj in instances 
-                    if (timestamp_ms - obj["last_timestamp_ms"]) <= timeout_threshold
-                ]
-                if not active_objects[label]:
-                    del active_objects[label]
-
-            # Increment frame number
+                            "track_id": track_id,
+                            "start_time": timestamp,
+                            "frames": []
+                        }, "$set": {"end_time": timestamp}},
+                        upsert=True
+                    )
+                # Interpolate skipped frames
+                if prev_keyframe_boxes is not None and prev_keyframe_tracks is not None:
+                    for skipped in range(prev_keyframe_num+1, frame_number):
+                        prev_tracks = {int(t[4]): t[:4] for t in prev_keyframe_tracks}
+                        curr_tracks = {int(t[4]): t[:4] for t in tracked}
+                        # Interpolate only for tracks present in both keyframes
+                        for track_id in set(prev_tracks.keys()) & set(curr_tracks.keys()):
+                            box_A = np.array(prev_tracks[track_id])
+                            box_B = np.array(curr_tracks[track_id])
+                            for i in range(1, frame_number - prev_keyframe_num):
+                                interp_frame = prev_keyframe_num + i
+                                ratio = i / (frame_number - prev_keyframe_num)
+                                interp_box = box_A + (box_B - box_A) * ratio
+                                interp_box = interp_box.tolist()
+                                interp_timestamp = frame_timestamps.get(interp_frame, None)
+                                objects_collection.update_one(
+                                    {"_id": f"{video_name}_{track_id}"},
+                                    {"$push": {"frames": {
+                                        "frame": interp_frame,
+                                        "timestamp": interp_timestamp,
+                                        "box": interp_box,
+                                        "confidence": None,
+                                        "interpolated": True
+                                    }}, "$set": {"end_time": timestamp}},
+                                    upsert=True
+                                )
+                prev_keyframe_boxes = dets.copy() if dets is not None else np.empty((0,4))
+                prev_keyframe_tracks = tracked.copy() if tracked is not None else np.empty((0,5))
             frame_number += 1
-
-            # Update the progress bar
             pbar.update(1)
-
-    # Release resources
     cap.release()
     out.release()
     logging.info(f"Annotated video saved at {annotated_video_path}")
