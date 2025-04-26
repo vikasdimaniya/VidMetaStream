@@ -130,89 +130,143 @@ export default function VideoUploader() {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">
-      <h1 className="text-2xl font-bold mb-6">Upload Video</h1>
-      
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-          {error}
-        </div>
-      )}
-
-      {uploadedVideo && (
-        <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-md">
-          Video uploaded successfully! Status: {uploadedVideo.status}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="title">
-            Title*
-          </label>
-          <input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:border-blue-300"
-            required
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="description">
-            Description
-          </label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:border-blue-300"
-            rows={3}
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="file">
-            Video File*
-          </label>
-          <input
-            id="file"
-            type="file"
-            accept="video/*"
-            onChange={handleFileChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:border-blue-300"
-            ref={fileInputRef}
-            required
-          />
-          {file && (
-            <p className="mt-1 text-sm text-gray-500">
-              Selected file: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+    <div className="bg-white dark:bg-gray-900 shadow-md rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+      <div className="p-5 sm:p-6">
+        <h1 className="text-xl font-bold mb-5 text-gray-900 dark:text-white">Upload Video</h1>
+        
+        {error && (
+          <div className="mb-5 p-3 bg-black/5 border-l-4 border-red-500 text-red-700 dark:text-red-400 dark:bg-red-500/10 rounded">
+            <p className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              {error}
             </p>
-          )}
-        </div>
-
-        {isUploading && (
-          <div className="mb-4">
-            <div className="w-full bg-gray-200 rounded-full h-2.5">
-              <div
-                className="bg-blue-600 h-2.5 rounded-full"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
-            <p className="text-sm text-center mt-1">{progress}% Uploaded</p>
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={isUploading}
-          className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:ring disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isUploading ? 'Uploading...' : 'Upload Video'}
-        </button>
-      </form>
+        {uploadedVideo && (
+          <div className="mb-5 p-3 bg-black/5 border-l-4 border-green-500 text-green-700 dark:text-green-400 dark:bg-green-500/10 rounded">
+            <p className="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Video uploaded successfully! Status: <span className="font-semibold">{uploadedVideo.status}</span>
+            </p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="title">
+              Title <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white dark:bg-gray-800 dark:text-white transition-colors"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="description">
+              Description
+            </label>
+            <textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white dark:bg-gray-800 dark:text-white transition-colors"
+              rows={2}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="file">
+              Video File <span className="text-red-500">*</span>
+            </label>
+            <div className="mt-1 flex items-center justify-center p-3 border border-gray-300 dark:border-gray-600 border-dashed rounded-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+              <div className="flex items-center space-x-3">
+                <svg 
+                  className="h-6 w-6 text-gray-400"
+                  stroke="currentColor"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path 
+                    d="M7 16a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3M5 19h14M12 4v12m-4-4l4 4 4-4" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                  />
+                </svg>
+                <div className="flex flex-col">
+                  <label
+                    htmlFor="file"
+                    className="cursor-pointer text-sm font-medium text-black dark:text-white hover:text-gray-500 dark:hover:text-gray-300"
+                  >
+                    <span>Select a video file</span>
+                    <input
+                      id="file"
+                      type="file"
+                      accept="video/*"
+                      onChange={handleFileChange}
+                      className="sr-only"
+                      ref={fileInputRef}
+                      required
+                    />
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    MP4, MOV, AVI up to 10GB
+                  </p>
+                </div>
+              </div>
+            </div>
+            {file && (
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Selected file: <span className="font-medium text-gray-900 dark:text-white">{file.name}</span> ({(file.size / (1024 * 1024)).toFixed(2)} MB)
+              </p>
+            )}
+          </div>
+
+          {isUploading && (
+            <div className="mt-4">
+              <div className="relative pt-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                      Uploading...
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-semibold inline-block text-gray-600 dark:text-gray-400">
+                      {progress}%
+                    </span>
+                  </div>
+                </div>
+                <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200 dark:bg-gray-700">
+                  <div
+                    style={{ width: `${progress}%` }}
+                    className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-black dark:bg-white transition-all duration-300"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isUploading}
+            className="w-full py-2 px-4 bg-black dark:bg-white text-white dark:text-black font-medium rounded-md hover:bg-gray-800 dark:hover:bg-gray-200 focus:outline-none focus:ring-1 focus:ring-offset-1 focus:ring-black dark:focus:ring-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isUploading ? 'Uploading...' : 'Upload Video'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 } 

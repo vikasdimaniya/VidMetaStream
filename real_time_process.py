@@ -1,6 +1,7 @@
 import cv2
 from ultralytics import YOLO
 import os
+import glob
 
 # Load YOLO model
 model = YOLO('yolo11n.pt')  # Replace with your YOLO model file
@@ -107,7 +108,63 @@ def process_video_save_annotated(video_path, output_path=None):
     
     print(f"Annotated video saved successfully at: {output_path}")
 
+def process_videos_in_folder(folder_path, output_folder=None):
+    """
+    Process all video files in the specified folder.
+    
+    Args:
+        folder_path (str): Path to the folder containing video files
+        output_folder (str, optional): Path to save annotated videos. If None, annotated videos
+                                      will be saved in the same directory.
+    """
+    # Create output folder if specified and doesn't exist
+    if output_folder and not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+        print(f"Created output directory: {output_folder}")
+    
+    # Get all video files in the folder (common video extensions)
+    video_extensions = ('*.mp4', '*.avi', '*.mov', '*.mkv', '*.mpg', '*.mpeg', '*.wmv')
+    video_files = []
+    
+    for ext in video_extensions:
+        video_files.extend(glob.glob(os.path.join(folder_path, ext)))
+    
+    if not video_files:
+        print(f"No video files found in {folder_path}")
+        return
+    
+    total_videos = len(video_files)
+    print(f"Found {total_videos} video files to process")
+    
+    # Process each video
+    for i, video_path in enumerate(video_files):
+        videos_left = total_videos - i
+        print(f"Processing video {i+1}/{total_videos}: {os.path.basename(video_path)}")
+        print(f"Videos remaining after this one: {videos_left-1}")
+        
+        if output_folder:
+            # Generate output path in the specified output folder
+            filename = os.path.basename(video_path)
+            output_path = os.path.join(output_folder, f"annotated_{filename}")
+        else:
+            output_path = None  # Will use default behavior in process_video_save_annotated
+        
+        # Process the video
+        process_video_save_annotated(video_path, output_path)
+        
+        # Print completion message
+        print(f"Completed video {i+1}/{total_videos}. {videos_left-1} videos remaining.")
+        print("-" * 50)
+
 if __name__ == "__main__":
-    # Replace with your actual video path
-    video_path = "/Users/brendangignac/adtproj/VidMetaStream/downloads/9354031-hd_1920_1080_30fps.mp4"
-    process_video_save_annotated(video_path)
+    # Process all videos in the sample_videos folder
+    sample_videos_folder = "sample_videos"
+    
+    # Optional: create a specific output folder for annotated videos
+    output_folder = "annotated_videos"
+    
+    # Process all videos without a specific output folder (will save in the same directory)
+    # process_videos_in_folder(sample_videos_folder)
+    
+    # Alternatively, uncomment the following line to save in a dedicated output folder
+    process_videos_in_folder(sample_videos_folder, output_folder="annotated_videos")
