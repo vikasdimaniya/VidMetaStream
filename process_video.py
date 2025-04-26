@@ -18,6 +18,12 @@ from datetime import datetime
 from skimage.metrics import structural_similarity as ssim
 import numpy as np
 from sort_tracker import Sort
+import time
+import signal
+import sys
+import tempfile
+from bson.objectid import ObjectId
+import threading
 
 # Load environment variables
 load_dotenv()
@@ -89,7 +95,12 @@ def process_video(video_path):
     fps = cap.get(cv2.CAP_PROP_FPS)
     if fps == 0:
         fps = 30
+        
+    # Extract the base video name without extension
     video_name = os.path.basename(video_path)
+    # Remove the file extension if present
+    video_id = os.path.splitext(video_name)[0]
+    
     annotated_video_name = f"annotated_{video_name}"
     annotated_video_path = os.path.join(os.path.dirname(video_path), annotated_video_name)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -154,23 +165,38 @@ def process_video(video_path):
                 # Save to MongoDB
                 for trk in tracked:
                     x1, y1, x2, y2, track_id = trk.tolist()
-                    objects_collection.update_one(
-                        {"_id": f"{video_name}_{track_id}"},
-                        {"$push": {"frames": {
-                            "frame": frame_number,
-                            "timestamp": timestamp,
-                            "box": [x1, y1, x2, y2],
-                            "confidence": None,
-                            "interpolated": False
-                        }}, "$setOnInsert": {
-                            "_id": f"{video_name}_{track_id}",
-                            "video_id": video_name,
+                    # Check if the object already exists before updating
+                    existing_obj = objects_collection.find_one({"_id": f"{video_id}_{track_id}"})
+                    
+                    if existing_obj:
+                        # Object exists, update with $push to frames
+                        objects_collection.update_one(
+                            {"_id": f"{video_id}_{track_id}"},
+                            {"$push": {"frames": {
+                                "frame": frame_number,
+                                "timestamp": timestamp,
+                                "box": [x1, y1, x2, y2],
+                                "confidence": None,
+                                "interpolated": False
+                            }}, "$set": {"end_time": timestamp}}
+                        )
+                    else:
+                        # Object doesn't exist yet, create new document
+                        objects_collection.insert_one({
+                            "_id": f"{video_id}_{track_id}",
+                            "video_id": video_id,
                             "track_id": track_id,
                             "start_time": timestamp,
-                            "frames": []
-                        }, "$set": {"end_time": timestamp}},
-                        upsert=True
-                    )
+                            "end_time": timestamp,
+                            "frames": [{
+                                "frame": frame_number,
+                                "timestamp": timestamp,
+                                "box": [x1, y1, x2, y2],
+                                "confidence": None,
+                                "interpolated": False
+                            }]
+                        })
+                
                 # Interpolate skipped frames
                 if prev_keyframe_boxes is not None and prev_keyframe_tracks is not None:
                     for skipped in range(prev_keyframe_num+1, frame_number):
@@ -186,16 +212,17 @@ def process_video(video_path):
                                 interp_box = box_A + (box_B - box_A) * ratio
                                 interp_box = interp_box.tolist()
                                 interp_timestamp = frame_timestamps.get(interp_frame, None)
+                                
+                                # Update using the same pattern as above
                                 objects_collection.update_one(
-                                    {"_id": f"{video_name}_{track_id}"},
+                                    {"_id": f"{video_id}_{track_id}"},
                                     {"$push": {"frames": {
                                         "frame": interp_frame,
                                         "timestamp": interp_timestamp,
                                         "box": interp_box,
                                         "confidence": None,
                                         "interpolated": True
-                                    }}, "$set": {"end_time": timestamp}},
-                                    upsert=True
+                                    }}, "$set": {"end_time": timestamp}}
                                 )
                 prev_keyframe_boxes = dets.copy() if dets is not None else np.empty((0,4))
                 prev_keyframe_tracks = tracked.copy() if tracked is not None else np.empty((0,5))
@@ -204,6 +231,7 @@ def process_video(video_path):
     cap.release()
     out.release()
     logging.info(f"Annotated video saved at {annotated_video_path}")
+    return annotated_video_path
 
 def compute_iou(box1, box2):
     """
@@ -277,259 +305,71 @@ def annotate_frame(frame, results, frame_width, frame_height):
     
     return frame
 
-#def upload_to_s3(file_path):
-#     file_name = os.path.basename(file_path)
-#     try:
-#         s3_client.upload_file(file_path, BUCKET_NAME, file_name)
-#         return f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_name}"
-#     except Exception as e:
-#         print(f"Error uploading to S3: {e}")
-#         return None
-
-
-# ##
-# Latest Good Version
-# import uuid  # For generating unique instance IDs
-# import os
-# import hashlib
-# import cv2
-# from tqdm import tqdm  # Import tqdm for the progress bar
-# from ultralytics import YOLO
-# from dotenv import load_dotenv
-# import boto3
-# import logging
-# from pymongo.mongo_client import MongoClient
-# from datetime import datetime
-
-# # Load environment variables
-# load_dotenv()
-
-# # MongoDB and S3 configuration
-# mongo_user_name = os.getenv("MONGO_USERNAME")
-# mongo_password = os.getenv("MONGO_PASSWORD")
-# AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
-# AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-# BUCKET_NAME = "vidmetastream"
-# db_name = "vidmetastream"
-
-# uri = f"mongodb+srv://{mongo_user_name}:{mongo_password}@adtcluster.d1cdf.mongodb.net/?retryWrites=true&w=majority&appName=adtCluster"
-# client = MongoClient(uri)
-# db = client[db_name]
-# collection = db["objects"]
-
-# s3_client = boto3.client(
-#     "s3",
-#     aws_access_key_id=AWS_ACCESS_KEY,
-#     aws_secret_access_key=AWS_SECRET_KEY,
-# )
-
-# model = YOLO('yolo11n.pt')
-# print(model.names)
-
-# class CustomFormatter(logging.Formatter):
-#     def formatTime(self, record, datefmt=None):
-#         # Format time with milliseconds
-#         ct = self.converter(record.created)
-#         if datefmt:
-#             s = datetime.fromtimestamp(record.created).strftime(datefmt)
-#             return s
-#         else:
-#             # Default format with milliseconds
-#             return datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
-
-# # Remove all existing handlers to prevent logging to the console
-# for handler in logging.root.handlers[:]:
-#     logging.root.removeHandler(handler)
-
-# # Create a FileHandler to write logs to a file
-# file_handler = logging.FileHandler('video_processing.log')
-# file_handler.setLevel(logging.INFO)
-
-# # Create and set the custom formatter with valid logging format placeholders
-# formatter = CustomFormatter(fmt='%(asctime)s - %(levelname)s - %(message)s')  # Ensures milliseconds are included
-# file_handler.setFormatter(formatter)
-
-# # Add the FileHandler to the root logger
-# logging.getLogger().addHandler(file_handler)
-
-# def process_video(video_path):
-#     cap = cv2.VideoCapture(video_path)
-#     frame_number = 0
-
-#     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+# Video monitoring loop
+if __name__ == "__main__":
+    print("Starting video monitoring service. Press Ctrl+C to stop.")
     
-#     # Get frame dimensions
-#     frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-#     frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-#     # MongoDB collections
-#     objects_collection = collection  # New collection for object presence
-
-#     # Temporary in-memory tracker for active objects
-#     # Format: {object_name: [{"instance_id": str, "last_frame": int, "last_timestamp_ms": float, "last_box": list}, ...]}
-#     active_objects = {}
-
-#     # Timeout threshold in milliseconds (e.g., 2 seconds)
-#     timeout_threshold = 2000  
-
-#     # IoU threshold for associating detections with existing tracked objects
-#     iou_threshold = 0.3
-
-#     # Extract video name (or S3 URL if available)
-#     video_name = os.path.basename(video_path)  # Replace with S3 link if needed
-
-#     with tqdm(total=total_frames, desc=f"Processing {video_name}", unit="frame") as pbar:
-#         while cap.isOpened():
-#             ret, frame = cap.read()
-#             if not ret:
-#                 break
-
-#             # Run object detection
-#             results = model.predict(frame, device="cpu", verbose=False)
+    try:
+        # Register signal handlers for graceful shutdown
+        def signal_handler(sig, frame):
+            print(f"Received signal {sig}, shutting down...")
+            sys.exit(0)
             
-#             # Extract frame timestamp
-#             timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-#             timestamp = convert_ms_to_timestamp(timestamp_ms)  # Now includes milliseconds
-
-#             for result in results:
-#                 for box in result.boxes:
-#                     # Extract object data
-#                     box_coordinates = box.xyxy[0].tolist()
-#                     label = model.names[int(box.cls[0])]
-#                     confidence = float(box.conf[0])
-#                     relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
-
-#                     logging.info(
-#                         f"Frame {frame_number}: Detected {label} with confidence {confidence:.2f}, "
-#                         f"Box: {box_coordinates}, Relative Position: {relative_position}"
-#                     )
-
-#                     # Initialize the list for this label if not present
-#                     if label not in active_objects:
-#                         active_objects[label] = []
-
-#                     matched_instance = None
-#                     max_iou = 0
-
-#                     # Iterate over existing active instances of this label to find a match
-#                     for obj in active_objects[label]:
-#                         iou = compute_iou(box_coordinates, obj["last_box"])
-#                         if iou > iou_threshold and iou > max_iou:
-#                             max_iou = iou
-#                             matched_instance = obj
-
-#                     if matched_instance:
-#                         # Update existing instance
-#                         matched_instance["last_frame"] = frame_number
-#                         matched_instance["last_timestamp_ms"] = timestamp_ms
-#                         matched_instance["last_box"] = box_coordinates
-
-#                         # Add frame data to MongoDB
-#                         objects_collection.update_one(
-#                             {"_id": matched_instance["instance_id"]},
-#                             {"$push": {"frames": {
-#                                 "frame": frame_number,
-#                                 "timestamp": timestamp,  # Now includes milliseconds
-#                                 "box": box_coordinates,
-#                                 "relative_position": relative_position,
-#                                 "confidence": confidence
-#                             }}}
-#                         )
-#                     else:
-#                         # Create a new instance
-#                         instance_id = str(uuid.uuid4())  # Unique identifier for the new instance
-#                         new_instance = {
-#                             "instance_id": instance_id,
-#                             "last_frame": frame_number,
-#                             "last_timestamp_ms": timestamp_ms,
-#                             "last_box": box_coordinates
-#                         }
-#                         active_objects[label].append(new_instance)
-
-#                         # Create a new document in MongoDB for this instance
-#                         new_doc = {
-#                             "_id": instance_id,
-#                             "video_name": video_name,
-#                             "object_name": label,
-#                             "frames": [{
-#                                 "frame": frame_number,
-#                                 "timestamp": timestamp,  # Now includes milliseconds
-#                                 "box": box_coordinates,
-#                                 "relative_position": relative_position,
-#                                 "confidence": confidence
-#                             }]
-#                         }
-#                         objects_collection.insert_one(new_doc)
-
-#             # Remove expired objects (based on timeout threshold)
-#             for label, instances in list(active_objects.items()):
-#                 active_objects[label] = [
-#                     obj for obj in instances 
-#                     if (timestamp_ms - obj["last_timestamp_ms"]) <= timeout_threshold
-#                 ]
-#                 if not active_objects[label]:
-#                     del active_objects[label]
-
-#             # Increment frame number
-#             frame_number += 1
-
-#             # Update the progress bar
-#             pbar.update(1)
-
-#     cap.release()
-
-# def compute_iou(box1, box2):
-#     """
-#     Compute the Intersection over Union (IoU) of two bounding boxes.
-#     Each box is represented by a list of four coordinates: [x1, y1, x2, y2]
-#     """
-#     x_left = max(box1[0], box2[0])
-#     y_top = max(box1[1], box2[1])
-#     x_right = min(box1[2], box2[2])
-#     y_bottom = min(box1[3], box2[3])
-
-#     if x_right < x_left or y_bottom < y_top:
-#         return 0.0
-
-#     intersection_area = (x_right - x_left) * (y_bottom - y_top)
-
-#     box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
-#     box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
-
-#     iou = intersection_area / float(box1_area + box2_area - intersection_area)
-#     return iou
-
-# def save_video_objects(file_name, metadata, s3_url):
-#     video_document = {
-#         "file_name": file_name,
-#         "s3_url": s3_url,
-#         "metadata": metadata
-#     }
-#     collection.insert_one(video_document)
-
-# def calculate_relative_position(box, frame_width, frame_height):
-#     """
-#     Calculate the relative position of the object in the frame.
-#     Returns [x_center_relative, y_center_relative]
-#     """
-#     x1, y1, x2, y2 = box
-#     x_center = (x1 + x2) / 2 / frame_width
-#     y_center = (y1 + y2) / 2 / frame_height
-#     return [x_center, y_center]
-
-
-# def convert_ms_to_timestamp(ms):
-#     """
-#     Convert milliseconds to a timestamp string in the format "HH:MM:SS.mmm".
-#     """
-#     seconds = ms / 1000
-#     return datetime.utcfromtimestamp(seconds).strftime('%H:%M:%S.%f')[:-3]
-
-# #def upload_to_s3(file_path):
-# #     file_name = os.path.basename(file_path)
-# #     try:
-# #         s3_client.upload_file(file_path, BUCKET_NAME, file_name)
-# #         return f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_name}"
-# #     except Exception as e:
-# #         print(f"Error uploading to S3: {e}")
-# #         return None
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # Simple monitoring loop
+        while True:
+            try:
+                # Find and update a video with 'uploaded' status atomically - similar to fragmenter.js
+                video = db.videos.find_one_and_update(
+                    {"status": "uploaded"},
+                    {"$set": {"status": "analyzing"}},
+                    return_document=True
+                )
+                
+                # If no video is found, sleep and continue
+                if not video:
+                    print("No videos to process")
+                    time.sleep(2)
+                    continue
+                
+                video_id = str(video["_id"])
+                print(f"Processing video: {video_id}")
+                
+                try:
+                    # Create a temporary directory for the video
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        # Define the local file path
+                        local_file_path = os.path.join(temp_dir, f"{video_id}.mp4")
+                        
+                        # Download the video from S3
+                        print(f"Downloading video {video_id} from S3")
+                        s3_client.download_file(BUCKET_NAME, video_id, local_file_path)
+                        
+                        # Process the video
+                        print(f"Processing video {video_id}")
+                        process_video(local_file_path)
+                        
+                        # Update status to 'analyzed'
+                        db.videos.update_one(
+                            {"_id": ObjectId(video_id)},
+                            {"$set": {"status": "analyzed"}}
+                        )
+                        print(f"Video {video_id} processed successfully")
+                        
+                except Exception as e:
+                    print(f"Error processing video {video_id}: {e}")
+                    # Update status to 'error'
+                    db.videos.update_one(
+                        {"_id": ObjectId(video_id)},
+                        {"$set": {"status": "error", "error": str(e)}}
+                    )
+                
+            except Exception as e:
+                print(f"Error in monitoring loop: {e}")
+                # Sleep a bit longer if there was an error
+                time.sleep(5)
+                
+    except KeyboardInterrupt:
+        print("Shutting down...")

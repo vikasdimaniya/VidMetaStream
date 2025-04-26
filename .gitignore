@@ -142,3 +142,12 @@ fragmented/
 downloads
 downloads/
 downloads/*.DS_Store
+
+annotated_videos
+annotated_videos/*
+
+sample_videos
+sample_videos/*
+
+output
+output/*

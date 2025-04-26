@@ -50,6 +50,7 @@ module.exports = {
 
         // Wait for all uploads to complete
         let results = await Promise.all(promiseList);
+        console.log('Uploaded all files to GridFS', results);
         return results;
     },
     getVideoFilesForTimeWindows: async (gridFSBucket, video_id, windows) => {
