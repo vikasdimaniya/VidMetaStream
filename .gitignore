@@ -151,7 +151,11 @@ downloads
 downloads/
 downloads/*.DS_Store
 
-sample_videos
-sample_videos/*
 annotated_videos
 annotated_videos/*
+
+sample_videos
+sample_videos/*
+
+output
+output/*
