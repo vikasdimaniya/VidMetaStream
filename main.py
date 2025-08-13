@@ -1,5 +1,5 @@
 from process_video import process_video
-from query_engine import query_menu
+# from query_engine import query_menu  # TODO: Implement query_engine module
 import threading
 import time
 import os
@@ -142,9 +142,9 @@ def main_menu():
         choice = input("Enter your choice: ").strip()
         if choice == "1":
             video_path = input("Enter the absolute path to the video file: ").strip()
-            process_video_cli(video_path)
+            process_video(video_path)
         elif choice == "2":
-            query_menu()
+            print("Query functionality not yet implemented. Please implement query_engine.py")
         elif choice == "3":
             print("Exiting. Goodbye!")
             break
