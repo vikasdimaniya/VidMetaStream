@@ -99,12 +99,24 @@ logging.info("Logging initialized for video processing")
 
 def process_video(
     video_path,
-    output_dir,
-    detection_model,
-    config,
+    output_dir="output",
+    detection_model="yolov8n",
+    config="yolov8n.yaml",
     gpu_id=0,
     keyframe_interval=5
 ):
+    # Helper function to match tracked objects with detection info
+    def match_track_to_detection(track_box, detection_info_list):
+        """Match a tracked bounding box to the best detection info based on IoU"""
+        best_match = None
+        best_iou = 0
+        for det_info in detection_info_list:
+            iou = compute_iou(track_box, det_info['box'])
+            if iou > best_iou:
+                best_iou = iou
+                best_match = det_info
+        return best_match if best_iou > 0.3 else None  # Threshold for matching
+    
     cap = cv2.VideoCapture(video_path)
     frame_number = 0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -170,10 +182,20 @@ def process_video(
                 # Run detection
                 results = model.predict(frame, device="cpu", verbose=False)
                 dets = []
+                detection_info = []  # Store class and confidence info
                 for result in results:
                     for box in result.boxes:
                         box_coordinates = box.xyxy[0].tolist()
+                        class_id = int(box.cls[0])
+                        class_name = model.names[class_id]
+                        confidence = float(box.conf[0])
                         dets.append(box_coordinates)
+                        detection_info.append({
+                            'class_id': class_id,
+                            'class_name': class_name,
+                            'confidence': confidence,
+                            'box': box_coordinates
+                        })
                 dets = np.array(dets) if len(dets) > 0 else np.empty((0,4))
                 # Run the tracker
                 tracked = sort_tracker.update(dets)
@@ -197,8 +219,20 @@ def process_video(
                     annotated_frame = frame.copy()
                     for trk in tracked:
                         x1, y1, x2, y2, track_id = trk.astype(int)
+                        
                         cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0,255,0), 2)
-                        cv2.putText(annotated_frame, f'ID:{track_id}', (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 2)
+                        
+                        # Create label with class and ID
+                        label = f'ID:{track_id}'  # Default label
+                        
+                        # Try to match with detection info if available
+                        if detection_info:
+                            track_box = [x1, y1, x2, y2]
+                            matched_detection = match_track_to_detection(track_box, detection_info)
+                            if matched_detection:
+                                label = f'{matched_detection["class_name"]}:{track_id}'
+                            
+                        cv2.putText(annotated_frame, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,0,0), 2)
                     out.write(annotated_frame)
                     # Save to MongoDB
                     for trk in tracked:
@@ -207,21 +241,39 @@ def process_video(
                         # Use consistent ID format for MongoDB documents
                         object_id = f"{video_id}_{track_id}"
                         
+                        # Initialize default values
+                        object_name = "unknown"
+                        object_confidence = None
+                        class_id = None
+                        
+                        # Match this track to detection info if available
+                        if detection_info:  # Only try to match if we have detection info
+                            track_box = [x1, y1, x2, y2]
+                            matched_detection = match_track_to_detection(track_box, detection_info)
+                            
+                            # Extract class information if matched
+                            if matched_detection:
+                                object_name = matched_detection['class_name']
+                                object_confidence = matched_detection['confidence']
+                                class_id = matched_detection['class_id']
+                        
                         # Check if the object already exists before updating
                         existing_obj = objects_collection.find_one({"_id": object_id})
                         
                         if existing_obj:
                             # Object exists, update with $push to frames
                             logging.info(f"Updating existing object {object_id} with new frame {frame_number}")
+                            # Convert timestamp to seconds for JavaScript compatibility
+                            end_time_seconds = timestamp_to_seconds(timestamp)
                             objects_collection.update_one(
                                 {"_id": object_id},
                                 {"$push": {"frames": {
                                     "frame": frame_number,
                                     "timestamp": timestamp,
                                     "box": [x1, y1, x2, y2],
-                                    "confidence": None,
+                                    "confidence": object_confidence,
                                     "interpolated": False
-                                }}, "$set": {"end_time": timestamp}}
+                                }}, "$set": {"end_time": end_time_seconds}}
                             )
                         else:
                             # New object - check if it's similar to any recently disappeared object
@@ -231,15 +283,17 @@ def process_video(
                             if similar_obj_id:
                                 # Use the existing object ID instead of creating a new one
                                 logging.info(f"Reusing existing object ID {similar_obj_id} instead of creating {object_id}")
+                                # Convert timestamp to seconds for JavaScript compatibility
+                                end_time_seconds = timestamp_to_seconds(timestamp)
                                 objects_collection.update_one(
                                     {"_id": similar_obj_id},
                                     {"$push": {"frames": {
                                         "frame": frame_number,
                                         "timestamp": timestamp,
                                         "box": [x1, y1, x2, y2],
-                                        "confidence": None,
+                                        "confidence": object_confidence,
                                         "interpolated": False
-                                    }}, "$set": {"end_time": timestamp}}
+                                    }}, "$set": {"end_time": end_time_seconds}}
                                 )
                                 
                                 # Store the mapping for future frames
@@ -248,17 +302,21 @@ def process_video(
                             else:
                                 # Object doesn't exist yet, create new document
                                 logging.info(f"Creating new object document for {object_id}")
+                                # Convert timestamp to seconds for JavaScript compatibility
+                                start_time_seconds = timestamp_to_seconds(timestamp)
                                 objects_collection.insert_one({
                                     "_id": object_id,
                                     "video_id": video_id,
                                     "track_id": track_id,
-                                    "start_time": timestamp,
-                                    "end_time": timestamp,
+                                    "object_name": object_name,
+                                    "class_id": class_id,
+                                    "start_time": start_time_seconds,
+                                    "end_time": start_time_seconds,
                                     "frames": [{
                                         "frame": frame_number,
                                         "timestamp": timestamp,
                                         "box": [x1, y1, x2, y2],
-                                        "confidence": None,
+                                        "confidence": object_confidence,
                                         "interpolated": False
                                     }]
                                 })
@@ -303,7 +361,7 @@ def process_video(
                                             "box": interp_box,
                                             "confidence": None,
                                             "interpolated": True
-                                        }}, "$set": {"end_time": timestamp}}
+                                        }}, "$set": {"end_time": timestamp_to_seconds(timestamp)}}
                                     )
                                     logging.info(f"MongoDB update result for interpolation: matched={result.matched_count}, modified={result.modified_count}")
                                 except Exception as e:
@@ -417,7 +475,7 @@ def process_video(
                                                 "box": [x1, y1, x2, y2],
                                                 "confidence": None,
                                                 "interpolated": True
-                                            }}, "$set": {"end_time": timestamp}}
+                                            }}, "$set": {"end_time": timestamp_to_seconds(timestamp)}}
                                         )
                                         logging.info(f"MongoDB optical flow update result: matched={result.matched_count}, modified={result.modified_count}")
                                     except Exception as e:

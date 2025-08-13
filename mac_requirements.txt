@@ -46,3 +46,4 @@ tzdata==2024.2
 ultralytics==8.3.35
 ultralytics-thop==2.0.12
 urllib3
+scikit-image==0.24.0
