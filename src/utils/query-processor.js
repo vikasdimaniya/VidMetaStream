@@ -609,26 +609,55 @@ module.exports = {
         return await gridFSStorage.downloadFileAsStream(core.getGridFSBucket(), fileId, destinationPath);
     },
     /**
-     * Queries for video segments where objects appear in a specified sequence.
+     * Queries for video segments where objects appear in a specified sequence with a minimum window size.
      * @param {Array} sequence - An array of object names in the order they should appear.
      * @param {number} windowSize - Minimum duration for the sequence.
      * @returns {Promise<Array>} - An array of video sections with the sequence.
      */
     querySequence: async (sequence, windowSize) => {
         const objectData = await queryService.getObjectData(sequence);
+        console.log("objectData:", objectData);
 
         // Organize object data by video_id
-        console.log(objectData);
-        let objectIntervals = {};
-        for (let object in objects) {
-            if (!objectIntervals.hasOwnProperty(object.object_name)) {
-                objectIntervals[object.object_name] = [object.start_time];
-            } else {
-                objectIntervals[object.object_name].push(object.start_time);
+        let videoObjectIntervals = {};
+        
+        // Group objects by video_id first
+        for (let object of objectData) {
+            const videoId = object.video_id;
+            if (!videoObjectIntervals[videoId]) {
+                videoObjectIntervals[videoId] = {};
+            }
+            
+            if (!videoObjectIntervals[videoId][object.object_name]) {
+                videoObjectIntervals[videoId][object.object_name] = [];
+            }
+            
+            // Add the time interval for this object instance
+            videoObjectIntervals[videoId][object.object_name].push({
+                start_time: object.start_time,
+                end_time: object.end_time,
+                object_id: object._id
+            });
+        }
+        
+        console.log("videoObjectIntervals:", videoObjectIntervals);
+        
+        // Find sequences for each video
+        let results = [];
+        
+        for (let videoId in videoObjectIntervals) {
+            const videoObjects = videoObjectIntervals[videoId];
+            const sequenceWindows = findSequenceWindows(videoObjects, sequence, windowSize);
+            
+            if (sequenceWindows.length > 0) {
+                results.push({
+                    video_id: videoId,
+                    windows: sequenceWindows
+                });
             }
         }
-
         
+        return results;
     },
 };
 
@@ -730,4 +759,142 @@ const isWithinRegion = (point, region) => {
     const [x1, y1, x2, y2] = region;
     const [x, y] = point;
     return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+};
+
+/**
+ * Find time windows where objects appear in a specified sequence with minimum window size
+ * @param {Object} videoObjects - Object intervals grouped by object name for a single video
+ * @param {Array} sequence - Array of object names in the order they should appear
+ * @param {number} windowSize - Minimum duration for the sequence in seconds
+ * @returns {Array} - Array of time windows containing the sequence
+ */
+const findSequenceWindows = (videoObjects, sequence, windowSize) => {
+    const sequenceWindows = [];
+    
+    // Check if all objects in the sequence exist in this video
+    for (let objectName of sequence) {
+        if (!videoObjects[objectName] || videoObjects[objectName].length === 0) {
+            console.log(`Object '${objectName}' not found in video, skipping sequence detection`);
+            return []; // If any object in sequence is missing, no valid sequences
+        }
+    }
+    
+    // Get all intervals for the first object in sequence
+    const firstObjectIntervals = videoObjects[sequence[0]];
+    
+    // For each occurrence of the first object, try to find a valid sequence
+    for (let firstInterval of firstObjectIntervals) {
+        const sequenceCandidate = findSequenceFromStart(
+            videoObjects, 
+            sequence, 
+            firstInterval.start_time, 
+            windowSize
+        );
+        
+        if (sequenceCandidate) {
+            sequenceWindows.push(sequenceCandidate);
+        }
+    }
+    
+    // Merge overlapping sequence windows
+    return mergeSequenceWindows(sequenceWindows);
+};
+
+/**
+ * Try to find a valid sequence starting from a given time
+ * @param {Object} videoObjects - Object intervals grouped by object name
+ * @param {Array} sequence - Array of object names in order
+ * @param {number} startTime - Starting time to look for sequence
+ * @param {number} windowSize - Minimum window size in seconds
+ * @returns {Object|null} - Sequence window or null if not found
+ */
+const findSequenceFromStart = (videoObjects, sequence, startTime, windowSize) => {
+    let currentTime = startTime;
+    let sequenceEnd = startTime;
+    const foundObjects = [];
+    
+    // Try to find each object in sequence order
+    for (let i = 0; i < sequence.length; i++) {
+        const objectName = sequence[i];
+        const objectIntervals = videoObjects[objectName];
+        
+        // Find the next occurrence of this object after currentTime
+        let foundInterval = null;
+        for (let interval of objectIntervals) {
+            if (interval.start_time >= currentTime) {
+                if (!foundInterval || interval.start_time < foundInterval.start_time) {
+                    foundInterval = interval;
+                }
+            }
+        }
+        
+        if (!foundInterval) {
+            // Object not found after current time, sequence invalid
+            return null;
+        }
+        
+        // Update sequence tracking
+        foundObjects.push({
+            object_name: objectName,
+            start_time: foundInterval.start_time,
+            end_time: foundInterval.end_time,
+            object_id: foundInterval.object_id
+        });
+        
+        currentTime = foundInterval.start_time;
+        sequenceEnd = Math.max(sequenceEnd, foundInterval.end_time);
+    }
+    
+    // Check if the total sequence duration meets minimum window size
+    const sequenceDuration = sequenceEnd - startTime;
+    if (sequenceDuration < windowSize) {
+        return null;
+    }
+    
+    // Return valid sequence window
+    return {
+        start_time: startTime,
+        end_time: sequenceEnd,
+        duration: sequenceDuration,
+        objects: foundObjects
+    };
+};
+
+/**
+ * Merge overlapping sequence windows
+ * @param {Array} windows - Array of sequence windows
+ * @returns {Array} - Merged sequence windows
+ */
+const mergeSequenceWindows = (windows) => {
+    if (windows.length === 0) return [];
+    
+    // Sort windows by start time
+    windows.sort((a, b) => a.start_time - b.start_time);
+    
+    const merged = [windows[0]];
+    
+    for (let i = 1; i < windows.length; i++) {
+        const current = windows[i];
+        const prev = merged[merged.length - 1];
+        
+        // Check if windows overlap or are contiguous
+        if (current.start_time <= prev.end_time) {
+            // Merge windows
+            prev.end_time = Math.max(prev.end_time, current.end_time);
+            prev.duration = prev.end_time - prev.start_time;
+            
+            // Combine objects from both windows (avoid duplicates)
+            const combinedObjects = [...prev.objects];
+            for (let obj of current.objects) {
+                if (!combinedObjects.find(existing => existing.object_id === obj.object_id)) {
+                    combinedObjects.push(obj);
+                }
+            }
+            prev.objects = combinedObjects;
+        } else {
+            merged.push(current);
+        }
+    }
+    
+    return merged;
 };

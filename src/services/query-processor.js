@@ -88,8 +88,11 @@ module.exports = {
 
             // Transform the results to the desired structure
             const transformedResults = results.map((result) => ({
+                _id: result._id,
                 video_id: result.video_id,
                 object_name: result.object_name,
+                start_time: result.start_time,
+                end_time: result.end_time,
                 frames: result.frames || [], // Ensure frames are included, default to an empty array
             }));
 
