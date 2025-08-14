@@ -109,6 +109,14 @@ dist
 
 # Docusaurus cache and generated files
 .docusaurus
+.venv/*
+.venv
+annotated_videos/*
+annotated_videos_archive/*
+minio-data/*
+minio-data
+output/*
+output
 
 # Serverless directories
 .serverless/

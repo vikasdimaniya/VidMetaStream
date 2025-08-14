@@ -74,12 +74,12 @@ def find_and_update_task():
                         try:
                             process_video(vid_path)
                             
-                            # Update the video status to "analized" after processing
+                            # Update the video status to "analyzed" after processing
                             collection.update_one(
                                 {"_id": result.get("_id")},
-                                {"$set": {"status": "analized"}}
+                                {"$set": {"status": "analyzed"}}
                             )
-                            print(f"Updated video status to 'analized' for video ID: {s3_key}")
+                            print(f"Updated video status to 'analyzed' for video ID: {s3_key}")
                             print("Video processed and metadata saved.")
                         except Exception as processing_error:
                             print(f"Error processing video: {processing_error}")
