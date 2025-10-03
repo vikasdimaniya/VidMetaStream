@@ -1,6 +1,7 @@
-const videoAPIs = require("../api/video.js");
-const apiSchema = require("../schema/video.js");
-async function videoRoutes(app) {
+import { videoAPIs } from '../api/video.js';
+import { apiSchema } from '../schema/video.js';
+
+export default async function videoRoutes(app) {
     app.get('/video/:video_id', {
         handler: videoAPIs.getVideo
     });
@@ -15,10 +16,4 @@ async function videoRoutes(app) {
     app.post('/upload/:video_id', {
         handler: videoAPIs.uploadVideo
     });
-
-    app.post('/video/:video_id/upload-complete', {
-        handler: videoAPIs.notifyUploadComplete
-    });
 }
-
-module.exports = videoRoutes;

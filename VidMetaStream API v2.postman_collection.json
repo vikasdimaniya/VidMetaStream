@@ -1,0 +1,757 @@
+{
+	"info": {
+		"_postman_id": "e2cfef29-22a4-4f13-a983-453930435643",
+		"name": "VidMetaStream API v2",
+		"description": "Complete VidMetaStream API collection for video metadata querying, object detection, and spatial-temporal analysis with YOLO",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "11631786",
+		"_collection_link": "https://takrino.postman.co/workspace/Team-Workspace~0aeb4ef0-b7b0-4b3b-80ed-685c07e31555/collection/11631786-e2cfef29-22a4-4f13-a983-453930435643?action=share&source=collection_link&creator=11631786"
+	},
+	"item": [
+		{
+			"name": "Video Management",
+			"item": [
+				{
+					"name": "Create Video Entry",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.video && response.video._id) {",
+									"        pm.collectionVariables.set('video_id', response.video._id);",
+									"        console.log('Video ID saved:', response.video._id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Sample Video - Person and Car Detection\",\n    \"description\": \"Test video for object detection with YOLO\",\n    \"filename\": \"test_video.mp4\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/video",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"video"
+							]
+						},
+						"description": "Creates a new video entry and returns upload URL for S3. Saves video_id to collection variable."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Video by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/video/{{video_id}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"video",
+								"{{video_id}}"
+							]
+						},
+						"description": "Retrieves video metadata by ID. Use video_id variable."
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Video File",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"description": "Select video file to upload",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/upload/{{video_id}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"upload",
+								"{{video_id}}"
+							]
+						},
+						"description": "Uploads video file to S3 and triggers ML processing. Video status will change to 'uploaded' then 'analyzing' then 'processed'."
+					},
+					"response": []
+				}
+			],
+			"description": "Upload and manage video files"
+		},
+		{
+			"name": "Spatial Queries",
+			"item": [
+				{
+					"name": "Query Spatial Objects (OR Logic)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/spatialObjects?objects=[\"person\",\"chair\"]&area=bottom-left",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"spatialObjects"
+							],
+							"query": [
+								{
+									"key": "objects",
+									"value": "[\"person\",\"chair\"]",
+									"description": "Array of object names (OR logic - finds ANY)"
+								},
+								{
+									"key": "area",
+									"value": "bottom-left",
+									"description": "Named area or coordinates [x1,y1,x2,y2]. Options: top-left, top-right, bottom-left, bottom-right, left-half, right-half, top-half, bottom-half"
+								}
+							]
+						},
+						"description": "Finds when ANY specified object appears in the area. Returns separate results per object."
+					},
+					"response": []
+				},
+				{
+					"name": "Query Spatial Objects (AND Logic)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/spatialObjectsAnd?objects=[\"person\",\"chair\"]&area=[0.0,0.0,1.0,1.0]",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"spatialObjectsAnd"
+							],
+							"query": [
+								{
+									"key": "objects",
+									"value": "[\"person\",\"chair\"]",
+									"description": "Array of object names (AND logic - ALL must be present)"
+								},
+								{
+									"key": "area",
+									"value": "[0.0,0.0,1.0,1.0]",
+									"description": "Coordinates [x1,y1,x2,y2] - bottom-right quarter"
+								}
+							]
+						},
+						"description": "Finds when ALL specified objects appear TOGETHER in the area simultaneously."
+					},
+					"response": []
+				},
+				{
+					"name": "Query Spatial Objects with Temporal Filter",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/spatialObjectsTemporal?objects=[\"chair\"]&area=left-half&start_time=0&end_time=30",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"spatialObjectsTemporal"
+							],
+							"query": [
+								{
+									"key": "objects",
+									"value": "[\"chair\"]",
+									"description": "Array of object names"
+								},
+								{
+									"key": "area",
+									"value": "left-half",
+									"description": "Spatial area"
+								},
+								{
+									"key": "start_time",
+									"value": "0",
+									"description": "Start time in seconds"
+								},
+								{
+									"key": "end_time",
+									"value": "30",
+									"description": "End time in seconds"
+								}
+							]
+						},
+						"description": "Finds objects in area during specific time range [start_time, end_time]."
+					},
+					"response": []
+				}
+			],
+			"description": "Query objects based on their location in the frame"
+		},
+		{
+			"name": "Temporal Queries",
+			"item": [
+				{
+					"name": "Query Objects Together",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/objects?objects=[\"chair\",\"person\",\"ball\"]&window_size=15",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"objects"
+							],
+							"query": [
+								{
+									"key": "objects",
+									"value": "[\"chair\",\"person\",\"ball\"]",
+									"description": "Array of objects that must appear together"
+								},
+								{
+									"key": "window_size",
+									"value": "15",
+									"description": "Optional: Maximum window duration in seconds"
+								}
+							]
+						},
+						"description": "Finds time windows where ALL objects appear simultaneously (no spatial constraint)."
+					},
+					"response": []
+				},
+				{
+					"name": "Query Instances at Time",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/queryInstancesAtTime?object=book&time=11",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"queryInstancesAtTime"
+							],
+							"query": [
+								{
+									"key": "object",
+									"value": "book",
+									"description": "Object name"
+								},
+								{
+									"key": "time",
+									"value": "11",
+									"description": "Timestamp in seconds"
+								}
+							]
+						},
+						"description": "Gets all instances of an object at specific moment."
+					},
+					"response": []
+				}
+			],
+			"description": "Query objects based on time and co-occurrence"
+		},
+		{
+			"name": "Instance Queries",
+			"item": [
+				{
+					"name": "Query Distinct Instances",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/queryDistinctInstances?object=person",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"queryDistinctInstances"
+							],
+							"query": [
+								{
+									"key": "object",
+									"value": "person",
+									"description": "Object type to retrieve instances for"
+								}
+							]
+						},
+						"description": "Gets all distinct instances of an object across all videos."
+					},
+					"response": []
+				},
+				{
+					"name": "Query Instance Overlaps",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/queryInstanceOverlaps?object=person&count=2",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"queryInstanceOverlaps"
+							],
+							"query": [
+								{
+									"key": "object",
+									"value": "person",
+									"description": "Object type"
+								},
+								{
+									"key": "count",
+									"value": "2",
+									"description": "Minimum number of simultaneous instances"
+								}
+							]
+						},
+						"description": "Finds when N+ instances of same object appear simultaneously (anywhere)."
+					},
+					"response": []
+				},
+				{
+					"name": "Query Instance Overlaps in Area",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/queryInstanceOverlapsInArea?object=person&count=2&area=left-half",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"queryInstanceOverlapsInArea"
+							],
+							"query": [
+								{
+									"key": "object",
+									"value": "person",
+									"description": "Object type"
+								},
+								{
+									"key": "count",
+									"value": "2",
+									"description": "Minimum instances in area"
+								},
+								{
+									"key": "area",
+									"value": "left-half",
+									"description": "Spatial area to check"
+								}
+							]
+						},
+						"description": "Finds when N+ instances of same object appear in specific area."
+					},
+					"response": []
+				}
+			],
+			"description": "Query object instances and their overlaps"
+		},
+		{
+			"name": "Sequence Queries",
+			"item": [
+				{
+					"name": "Query Object Sequence",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/temporal/objects?sequence=[\"book\",\"sports ball\"]&window_size=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"temporal",
+								"objects"
+							],
+							"query": [
+								{
+									"key": "sequence",
+									"value": "[\"book\",\"sports ball\"]",
+									"description": "Array of objects in order they should appear"
+								},
+								{
+									"key": "window_size",
+									"value": "20",
+									"description": "Optional: Max duration of sequence in seconds"
+								}
+							]
+						},
+						"description": "Finds when objects appear in specified order. Each object must start after previous ends."
+					},
+					"response": []
+				}
+			],
+			"description": "Query objects appearing in specific order"
+		},
+		{
+			"name": "Video Chunks",
+			"item": [
+				{
+					"name": "Get Video Chunks",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response && response[0] && response[0][0] && response[0][0]._id) {",
+									"        pm.collectionVariables.set('chunk_id', response[0][0]._id);",
+									"        console.log('Chunk ID saved:', response[0][0]._id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"videos\": [\n        {\n            \"video_id\": \"{{video_id}}\",\n            \"windows\": [\n                {\n                    \"startTime\": 10.0,\n                    \"endTime\": 20.0\n                },\n                {\n                    \"startTime\": 30.0,\n                    \"endTime\": 40.0\n                }\n            ]\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/query/chunks",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"chunks"
+							]
+						},
+						"description": "Gets video file chunks (fragments) for specific time windows. Saves first chunk_id to variable."
+					},
+					"response": []
+				},
+				{
+					"name": "Download Video Chunk",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/chunk/download/{{chunk_id}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"chunk",
+								"download",
+								"{{chunk_id}}"
+							]
+						},
+						"description": "Downloads a specific video chunk file by ID. Returns binary video file."
+					},
+					"response": []
+				}
+			],
+			"description": "Retrieve and download video segments"
+		},
+		{
+			"name": "Pagination",
+			"item": [
+				{
+					"name": "Paginated Spatial Objects",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/spatialObjectsPaginated?objects=[\"person\"]&area=top-half&page=1&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"spatialObjectsPaginated"
+							],
+							"query": [
+								{
+									"key": "objects",
+									"value": "[\"person\"]",
+									"description": "Array of object names"
+								},
+								{
+									"key": "area",
+									"value": "top-half",
+									"description": "Spatial area"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Results per page (default: 20)"
+								}
+							]
+						},
+						"description": "Paginated version of spatial objects query. Returns data + pagination metadata."
+					},
+					"response": []
+				},
+				{
+					"name": "Paginated Instances",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/queryInstancesPaginated?object=car&page=1&limit=50",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"queryInstancesPaginated"
+							],
+							"query": [
+								{
+									"key": "object",
+									"value": "car",
+									"description": "Object type"
+								},
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number"
+								},
+								{
+									"key": "limit",
+									"value": "50",
+									"description": "Results per page"
+								}
+							]
+						},
+						"description": "Paginated list of object instances. Good for large datasets."
+					},
+					"response": []
+				}
+			],
+			"description": "Paginated queries for large result sets"
+		},
+		{
+			"name": "Batch Operations",
+			"item": [
+				{
+					"name": "Batch Query",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"queries\": [\n        {\n            \"type\": \"querySpatialObjects\",\n            \"params\": {\n                \"objects\": [\"person\"],\n                \"area\": \"left-half\"\n            }\n        },\n        {\n            \"type\": \"queryInstances\",\n            \"params\": {\n                \"object\": \"book\"\n            }\n        },\n        {\n            \"type\": \"queryInstanceOverlaps\",\n            \"params\": {\n                \"object\": \"person\",\n                \"count\": \"2\"\n            }\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/query/batch",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"batch"
+							]
+						},
+						"description": "Executes up to 10 queries in parallel. Each query has type and params. Results returned in same order."
+					},
+					"response": []
+				}
+			],
+			"description": "Execute multiple queries at once"
+		},
+		{
+			"name": "Examples - Common Use Cases",
+			"item": [
+				{
+					"name": "Example: Find Crowded Scenes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/queryInstanceOverlaps?object=person&count=5",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"queryInstanceOverlaps"
+							],
+							"query": [
+								{
+									"key": "object",
+									"value": "person"
+								},
+								{
+									"key": "count",
+									"value": "5",
+									"description": "Find when 5+ people appear"
+								}
+							]
+						},
+						"description": "Use Case: Find crowded scenes with 5 or more people visible."
+					},
+					"response": []
+				},
+				{
+					"name": "Example: Traffic Detection",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/spatialObjectsAnd?objects=[\"car\",\"truck\"]&area=bottom-half",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"spatialObjectsAnd"
+							],
+							"query": [
+								{
+									"key": "objects",
+									"value": "[\"car\",\"truck\"]"
+								},
+								{
+									"key": "area",
+									"value": "bottom-half",
+									"description": "Lower road area"
+								}
+							]
+						},
+						"description": "Use Case: Detect when cars and trucks share the road (bottom of frame)."
+					},
+					"response": []
+				},
+				{
+					"name": "Example: Pet Detection at Home",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/spatialObjects?objects=[\"dog\",\"cat\"]&area=[0.0,0.5,1.0,1.0]",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"spatialObjects"
+							],
+							"query": [
+								{
+									"key": "objects",
+									"value": "[\"dog\",\"cat\"]"
+								},
+								{
+									"key": "area",
+									"value": "[0.0,0.5,1.0,1.0]",
+									"description": "Bottom half of frame (floor level)"
+								}
+							]
+						},
+						"description": "Use Case: Find when pets (dog or cat) are on the floor (bottom half)."
+					},
+					"response": []
+				},
+				{
+					"name": "Example: Activity Sequence",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/query/temporal/objects?sequence=[\"person\",\"chair\",\"laptop\"]&window_size=30",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"query",
+								"temporal",
+								"objects"
+							],
+							"query": [
+								{
+									"key": "sequence",
+									"value": "[\"person\",\"chair\",\"laptop\"]"
+								},
+								{
+									"key": "window_size",
+									"value": "30"
+								}
+							]
+						},
+						"description": "Use Case: Detect work activity - person appears, then sits on chair, then laptop appears."
+					},
+					"response": []
+				}
+			],
+			"description": "Real-world usage examples"
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "video_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "chunk_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

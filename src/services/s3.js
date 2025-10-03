@@ -1,9 +1,23 @@
-const { S3Client, PutObjectCommand, GetObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, HeadObjectCommand } = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-const fs = require('fs');
-const { pipeline } = require('stream');
-const { promisify } = require('util');
-const core = require("../../core.js");
+import { S3Client, PutObjectCommand, GetObjectCommand, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import fs from 'fs';
+import { pipeline } from 'stream';
+import { promisify } from 'util';
+import core from '../../core.js';
+import { Upload } from '@aws-sdk/lib-storage';
+
+const s3Client = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    },
+    endpoint: process.env.AWS_S3_ENDPOINT_URL,
+    forcePathStyle: true,
+    tls: false,
+    maxAttempts: 3
+});
+
 const pump = promisify(pipeline);
 
 /**
@@ -18,16 +32,20 @@ async function getUploadSignedUrl(bucketName, key, expiresIn = 3600) {
         const command = new PutObjectCommand({
             Bucket: bucketName,
             Key: key,
-            ContentType: 'video/mp4', // Adjust the content type as needed
+            ContentType: 'application/octet-stream'
         });
 
-        const signedUrl = await getSignedUrl(core.s3Client, command, { expiresIn });
+        const signedUrl = await getSignedUrl(s3Client, command, { 
+            expiresIn: 3600,
+            signableHeaders: new Set(['host'])
+        });
         return signedUrl;
     } catch (error) {
         console.error("Error generating signed URL for upload:", error);
         throw new Error("Could not generate signed URL for upload.");
     }
 }
+
 async function uploadVideo(bucketName, key, fileContent) {
     try {
         const command = new PutObjectCommand({
@@ -37,13 +55,14 @@ async function uploadVideo(bucketName, key, fileContent) {
             ContentType: 'video/mp4', // Adjust the content type as needed
         });
 
-        const response = await core.s3Client.send(command);
+        const response = await s3Client.send(command);
         console.log("Upload successful:", response);
     } catch (error) {
         console.error("Error uploading video:", error);
         throw new Error("Could not upload video.");
     }
 }
+
 async function uploadVideoStream(bucketName, key, filePath) {
     try {
         // Create a readable stream from the file
@@ -58,13 +77,14 @@ async function uploadVideoStream(bucketName, key, filePath) {
         });
 
         // Send the command to S3
-        const response = await core.s3Client.send(command);
+        const response = await s3Client.send(command);
         console.log("Upload successful:", response);
     } catch (error) {
         console.error("Error uploading video:", error);
         throw new Error("Could not upload video.");
     }
 }
+
 /**
  * Download a video from S3 to a local file.
  * @param {string} bucketName - The S3 bucket name.
@@ -79,7 +99,7 @@ async function downloadVideo(bucketName, key, downloadPath) {
             Key: key,
         });
 
-        const response = await core.s3Client.send(command);
+        const response = await s3Client.send(command);
 
         // Stream the S3 object to the local file
         await pump(response.Body, fs.createWriteStream(downloadPath));
@@ -90,75 +110,43 @@ async function downloadVideo(bucketName, key, downloadPath) {
     }
 }
 
-
 async function uploadLargeVideoFile(bucketName, key, filePath) {
-    const partSize = 32 * 1024 * 1024; // in mb
-    const fileStream = fs.createReadStream(filePath, { highWaterMark: partSize });
-
-    const createCommand = new CreateMultipartUploadCommand({
-        Bucket: bucketName,
-        Key: key,
-    });
-
-    const createResponse = await core.s3Client.send(createCommand);
-    const uploadId = createResponse.UploadId;
-
-    let parts = [];
-    let partNumber = 1;
-
-    for await (const chunk of fileStream) {
-        const uploadPartCommand = new UploadPartCommand({
+    const fileStream = fs.createReadStream(filePath);
+    
+    const upload = new Upload({
+        client: s3Client,
+        params: {
             Bucket: bucketName,
             Key: key,
-            PartNumber: partNumber,
-            UploadId: uploadId,
-            Body: chunk,
-        });
-
-        const uploadPartResponse = await core.s3Client.send(uploadPartCommand);
-        parts.push({ ETag: uploadPartResponse.ETag, PartNumber: partNumber });
-
-        console.log(`Uploaded part ${partNumber} with ETag: ${uploadPartResponse.ETag}`);
-        partNumber++;
-    }
-
-    const completeCommand = new CompleteMultipartUploadCommand({
-        Bucket: bucketName,
-        Key: key,
-        UploadId: uploadId,
-        MultipartUpload: { Parts: parts },
+            Body: fileStream,
+            ContentType: 'application/octet-stream'
+        }
     });
 
-    let response = await core.s3Client.send(completeCommand);
-    console.log("File uploaded:", key, response);
-}
-
-/**
- * Check if a file exists in the S3 bucket
- * @param {string} bucketName - The S3 bucket name.
- * @param {string} key - The object key (e.g., filename).
- * @returns {Promise<boolean>} - Resolves to true if the file exists, throws an error otherwise.
- */
-async function checkFileExists(bucketName, key) {
     try {
-        const command = new HeadObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-        });
-
-        await core.s3Client.send(command);
-        return true; // File exists
-    } catch (error) {
-        console.error(`Error checking if file ${key} exists in ${bucketName}:`, error);
-        throw new Error(`File ${key} does not exist in bucket ${bucketName}`);
+        await upload.done();
+        console.log(`Successfully uploaded ${key} to ${bucketName}`);
+    } catch (err) {
+        console.error('Error uploading file:', err);
+        throw err;
     }
 }
 
-module.exports = {
+export const s3Service = {
     getUploadSignedUrl,
     uploadVideo,
     uploadVideoStream,
     uploadLargeVideoFile,
     downloadVideo,
-    checkFileExists
+    getDownloadSignedUrl: async (bucket, key) => {
+        const command = new GetObjectCommand({
+            Bucket: bucket,
+            Key: key
+        });
+
+        return await getSignedUrl(s3Client, command, { 
+            expiresIn: 3600,
+            signableHeaders: new Set(['host'])
+        });
+    }
 };

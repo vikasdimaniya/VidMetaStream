@@ -1,7 +1,10 @@
-require('dotenv').config();
+import 'dotenv/config';
 console.log("AWS_REGION:", process.env.AWS_REGION);
-const mongoose = require('mongoose');
-const { S3Client } = require('@aws-sdk/client-s3');
+console.log('MONGODB_URI from env:', process.env.MONGODB_URI);
+import mongoose from 'mongoose';
+import { S3Client } from '@aws-sdk/client-s3';
+
+// Configure S3 client to use MinIO
 const s3Client = new S3Client({
     region: process.env.AWS_REGION,
     credentials: {
@@ -9,7 +12,8 @@ const s3Client = new S3Client({
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     },
     endpoint: process.env.AWS_S3_ENDPOINT_URL,
-    forcePathStyle: process.env.AWS_S3_ADDRESSING_STYLE === 'path'
+    forcePathStyle: process.env.AWS_S3_ADDRESSING_STYLE === 'path',
+    tls: false // Disable SSL verification for local development
 });
 
 const dbName = 'vidmetastream';
@@ -37,7 +41,7 @@ async function initMongo() {
     }
 }
 
-module.exports = {
+export default {
     initMongo,
     getDb: () => db,
     getGridFSBucket: () => gridFSBucket,

@@ -159,6 +159,8 @@ annotated_videos/*
 
 sample_videos
 sample_videos/*
-
+.venv/*
+venv/*
 output
 output/*
+*.pyc

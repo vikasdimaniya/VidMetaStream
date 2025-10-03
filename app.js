@@ -1,32 +1,42 @@
-const Fastify = require('fastify');
-const multipart = require('@fastify/multipart');
-const videoRoutes = require('./src/routes/video.js'); // Import video routes
-const queryProcessorRoutes = require("./src/routes/query-processor.js");
-const cors = require('@fastify/cors'); // Import CORS plugin
-const core = require("./core.js") //initializes parameters
-let app = Fastify({
+import Fastify from 'fastify';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyCors from '@fastify/cors';
+import videoRoutes from './src/routes/video.js';
+import queryRoutes from './src/routes/query-processor.js';
+import db from './src/db.js';
+import dotenv from 'dotenv';
+import { mcpServer } from './src/mcp-server.js';
+
+dotenv.config();
+
+const fastify = Fastify({
     logger: true
 });
 
-// Register CORS
-app.register(cors, {
-    origin: process.env.CORS_ORIGIN || '*', // Allow requests from any origin
-    methods: ['GET', 'PUT', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+// Register plugins
+fastify.register(fastifyMultipart);
+fastify.register(fastifyCors, {
+    origin: true
 });
 
-app.register(multipart,{
-    limits: {
-        fileSize: 10 * 1024 * 1024 * 1024, // Set max file size to 10GB
-    },
-});
+// Connect to MongoDB
+await db.connectDB();
 
-app.get('/ping', async function (req, reply) {
-    return reply.send({ ping: 'pong' });
-});
+// Register routes
+await videoRoutes(fastify);
+await queryRoutes(fastify);
 
-app.register(videoRoutes);
-app.register(queryProcessorRoutes);
+// Start the server
+const start = async () => {
+    try {
+        await fastify.listen({ port: process.env.PORT || 8000, host: '0.0.0.0' });
+        console.log(`API server running on port ${process.env.PORT || 8000}`);
+        
+        // MCP server is already connected via StdioServerTransport in mcp-server.js
+    } catch (err) {
+        fastify.log.error(err);
+        process.exit(1);
+    }
+};
 
-module.exports = app;
+start();

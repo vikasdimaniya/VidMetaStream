@@ -1,11 +1,12 @@
-const fs = require('fs');
-const { pipeline } = require('stream');
-const { promisify } = require('util');
-const db = require('../db');
-const s3Service = require("../services/s3.js");
+import fs from 'fs';
+import { pipeline } from 'stream';
+import { promisify } from 'util';
+import db from '../db/index.js';
+import { s3Service } from '../services/s3.js';
+
 const pump = promisify(pipeline);
 
-module.exports = {
+export const videoAPIs = {
     /**
      * Get a list of all videos
      * This will return a list of all videos in the database
@@ -17,7 +18,7 @@ module.exports = {
             return;
         }
 
-        return db.video.findById(req.params.video_id);
+        return db.videos.findById(req.params.video_id);
     },
 
     /**
@@ -25,7 +26,7 @@ module.exports = {
      * After this you have to call post /upload/:video_id to upload the video file
      */
     createVideo: async (req, reply) => {
-        let video = new db.video({
+        let video = new db.videos({
             title: req.body.title,
             description: req.body.description,
             filename: req.body.filename
@@ -56,7 +57,7 @@ module.exports = {
             reply.code(400).send({ message: 'No video id provided' });
             return;
         }
-        const video = await db.video.findById(req.params.video_id);
+        const video = await db.videos.findById(req.params.video_id);
         if (!video) {
             reply.code(404).send({ message: 'Video not found' });
             return;
@@ -130,4 +131,4 @@ module.exports = {
             reply.code(500).send({ message: 'Server error while processing upload notification' });
         }
     }
-}
+};

@@ -1,6 +1,6 @@
-const ffmpeg = require('fluent-ffmpeg');
-const path = require('path');
-const fs = require('fs');
+import ffmpeg from 'fluent-ffmpeg';
+import path from 'path';
+import fs from 'fs';
 
 // Function to get the duration of a video file using ffprobe
 function getVideoDuration(filePath) {
@@ -67,4 +67,4 @@ async function splitVideoIntoChunks(inputFilePath, outputDir) {
     });
 }
 
-module.exports = { splitVideoIntoChunks };
+export default { splitVideoIntoChunks };
