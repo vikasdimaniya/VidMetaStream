@@ -792,34 +792,86 @@ const queryProcessorUtils = {
     },
 
     //Logic for spatial queries logical OR of objects in space obj x OR y in area
+    // Uses QuadTree spatial indexing for efficient position queries on large frame sets
     querySpatialObjects: async ({ objects, area }) => {
         const results = [];
         const objectData = await queryService.getObjectData(objects);
+        
+        // Threshold for using QuadTree (beneficial for large frame counts)
+        const QUADTREE_THRESHOLD = 100;
     
         for (const obj of objectData) {
             const { video_id, object_name, frames } = obj;
+            
+            // Skip if no frames
+            if (!frames || frames.length === 0) continue;
     
             const validWindows = [];
             let currentWindowStart = null;
-    
-            for (const frame of frames) {
-                const [x, y] = frame.relative_position;
-    
-                if (isPositionInArea([x, y], area)) {
-                    if (currentWindowStart === null) {
-                        currentWindowStart = frame.timestamp;
+            
+            // Use QuadTree optimization for large frame sets
+            if (frames.length > QUADTREE_THRESHOLD) {
+                // Build QuadTree for this instance's frames
+                const quadTree = new SpatialIndex();
+                
+                // Insert frames into QuadTree with frame index as ID
+                frames.forEach((frame, idx) => {
+                    if (frame.relative_position && frame.relative_position.length === 2) {
+                        const [x, y] = frame.relative_position;
+                        // Create a small bounding box around the point (±0.001)
+                        const bbox = {
+                            x: x - 0.001,
+                            y: y - 0.001,
+                            width: 0.002,
+                            height: 0.002
+                        };
+                        quadTree.insert(video_id, idx, bbox);
                     }
-                } else {
-                    if (currentWindowStart !== null) {
-                        validWindows.push({
-                            start_time: currentWindowStart,
-                            end_time: frame.timestamp,
-                        });
-                        currentWindowStart = null;
+                });
+                
+                // Query QuadTree for frames in area
+                const framesInAreaSet = new Set(quadTree.query(video_id, area));
+                
+                // Build windows from frames in area (maintain temporal order)
+                frames.forEach((frame, idx) => {
+                    const isInArea = framesInAreaSet.has(idx);
+                    
+                    if (isInArea) {
+                        if (currentWindowStart === null) {
+                            currentWindowStart = frame.timestamp;
+                        }
+                    } else {
+                        if (currentWindowStart !== null) {
+                            validWindows.push({
+                                start_time: currentWindowStart,
+                                end_time: frame.timestamp,
+                            });
+                            currentWindowStart = null;
+                        }
+                    }
+                });
+            } else {
+                // Linear scan for small frame sets (O(F) but lower overhead)
+                for (const frame of frames) {
+                    const [x, y] = frame.relative_position;
+    
+                    if (isPositionInArea([x, y], area)) {
+                        if (currentWindowStart === null) {
+                            currentWindowStart = frame.timestamp;
+                        }
+                    } else {
+                        if (currentWindowStart !== null) {
+                            validWindows.push({
+                                start_time: currentWindowStart,
+                                end_time: frame.timestamp,
+                            });
+                            currentWindowStart = null;
+                        }
                     }
                 }
             }
     
+            // Close any open window at end
             if (currentWindowStart !== null) {
                 validWindows.push({
                     start_time: currentWindowStart,
