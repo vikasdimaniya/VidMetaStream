@@ -8,11 +8,18 @@ import Objects from './model/objects.js';
 import getFragmentsModel from './model/fragments.js';
 import Video from './model/video.js';
 
-// MongoDB connection
+// MongoDB connection with optimized connection pooling
 const connectDB = async () => {
     try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/vidmetastream');
+        const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/vidmetastream', {
+            maxPoolSize: 50,                   // Maximum 50 connections in pool (sufficient for most workloads)
+            minPoolSize: 10,                   // Minimum 10 connections (keeps connections warm)
+            serverSelectionTimeoutMS: 5000,    // 5 second timeout for server selection
+            socketTimeoutMS: 45000,            // 45 second socket timeout
+            family: 4                          // Use IPv4, skip trying IPv6 (faster connection)
+        });
         console.log(`MongoDB Connected: ${conn.connection.host}`);
+        console.log(`Connection Pool: min=10, max=50 (optimized)`);
         return conn;
     } catch (error) {
         console.error(`Error: ${error.message}`);

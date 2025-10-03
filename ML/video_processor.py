@@ -252,6 +252,23 @@ class VideoProcessor:
                             matched_instance["last_box"] = box_coordinates
                             matched_instance["end_time"] = timestamp_to_seconds(timestamp)  # Update end_time
 
+                            # Check document size before adding frame (MongoDB 16MB limit protection)
+                            # Each frame ~100 bytes, limit is 16MB = 167,000 frames
+                            # Warn at 90% = 150,000 frames
+                            current_frame_count = matched_instance.get("frame_count", frame_number - matched_instance.get("last_frame", 0))
+                            if current_frame_count > 150000:
+                                logger.warning(
+                                    f"⚠️ CRITICAL: Instance approaching MongoDB 16MB limit",
+                                    extra={
+                                        "instance_id": matched_instance["instance_id"],
+                                        "frame_count": current_frame_count,
+                                        "object_name": label,
+                                        "video_id": video_name,
+                                        "message": "Instance has >150,000 frames (90% of MongoDB 16MB limit). "
+                                                   "Consider implementing instance splitting to avoid data loss."
+                                    }
+                                )
+
                             # Add frame data to MongoDB
                             objects_collection.update_one(
                                 {"_id": matched_instance["instance_id"]},
@@ -262,7 +279,7 @@ class VideoProcessor:
                                     "relative_position": relative_position,
                                     "confidence": confidence
                                 }},
-                                "$set": {"end_time": timestamp_to_seconds(timestamp)}  # Update end_time
+                                "$set": {"end_time": timestamp_to_seconds(timestamp), "frame_count": current_frame_count + 1}  # Update end_time and frame count
                                 }
                             )
                         else:
@@ -274,7 +291,8 @@ class VideoProcessor:
                                 "start_time": timestamp_to_seconds(timestamp),  # Set start_time
                                 "end_time": timestamp_to_seconds(timestamp),    # Initialize end_time
                                 "last_timestamp_ms": timestamp_ms,
-                                "last_box": box_coordinates
+                                "last_box": box_coordinates,
+                                "frame_count": 1  # Track frame count for 16MB limit monitoring
                             }
                             active_objects[label].append(new_instance)
 
@@ -285,6 +303,7 @@ class VideoProcessor:
                                 "object_name": label,
                                 "start_time": timestamp_to_seconds(timestamp), 
                                 "end_time": timestamp_to_seconds(timestamp),    # Initialize end_time
+                                "frame_count": 1,  # Track frame count for 16MB limit monitoring
                                 "frames": [{
                                     "frame": frame_number,
                                     "timestamp": timestamp,

@@ -154,6 +154,80 @@ async function videoRoutes(app) {
         handler: queryProcessorAPIs.querySequence
     });
 
+    // Cache statistics endpoint for monitoring cache performance
+    app.get('/cache/stats', async (req, reply) => {
+        const queryCache = (await import('../utils/query-cache.js')).default;
+        const { intervalTreeCache } = await import('../utils/query-processor.js');
+        
+        const queryCacheStats = queryCache.getStats();
+        const intervalTreeStats = intervalTreeCache.getStats();
+        
+        return reply.send({
+            queryCache: {
+                ...queryCacheStats,
+                description: {
+                    hits: 'Number of cache hits',
+                    misses: 'Number of cache misses',
+                    sets: 'Number of cache entries created',
+                    evictions: 'Number of entries evicted due to size limit',
+                    entries: 'Current number of cached entries',
+                    currentSizeMB: 'Current cache size in MB',
+                    maxSizeMB: 'Maximum cache size limit in MB',
+                    hitRate: 'Cache hit rate (0-1, where 1 = 100%)',
+                    utilizationPercent: 'Cache memory utilization percentage'
+                }
+            },
+            intervalTreeCache: {
+                ...intervalTreeStats,
+                description: {
+                    size: 'Number of cached interval trees',
+                    capacity: 'Maximum number of trees to cache',
+                    utilizationPercent: 'Cache utilization percentage'
+                }
+            },
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    // Cache invalidation endpoints for manual cache management
+    app.delete('/cache/invalidate/video/:video_id', async (req, reply) => {
+        const queryCache = (await import('../utils/query-cache.js')).default;
+        const { video_id } = req.params;
+        
+        queryCache.invalidateVideo(video_id);
+        
+        return reply.send({
+            success: true,
+            message: `Cache invalidated for video_id: ${video_id}`,
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    app.delete('/cache/invalidate/object/:object_name', async (req, reply) => {
+        const queryCache = (await import('../utils/query-cache.js')).default;
+        const { object_name } = req.params;
+        
+        queryCache.invalidateObject(object_name);
+        
+        return reply.send({
+            success: true,
+            message: `Cache invalidated for object_name: ${object_name}`,
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    app.delete('/cache/clear', async (req, reply) => {
+        const queryCache = (await import('../utils/query-cache.js')).default;
+        
+        queryCache.clear();
+        
+        return reply.send({
+            success: true,
+            message: 'Cache completely cleared',
+            timestamp: new Date().toISOString()
+        });
+    });
+
     // Test endpoint for debugging
     app.get('/query/test', (req, reply) => {
         const objects = req.query.objects;

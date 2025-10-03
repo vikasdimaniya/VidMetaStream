@@ -3,6 +3,9 @@ import { pipeline } from 'stream';
 import { promisify } from 'util';
 import db from '../db/index.js';
 import { s3Service } from '../services/s3.js';
+import queryCache from '../utils/query-cache.js';
+// Import intervalTreeCache for cache invalidation
+import queryProcessor from '../utils/query-processor.js';
 
 const pump = promisify(pipeline);
 
@@ -129,6 +132,47 @@ export const videoAPIs = {
         } catch (error) {
             console.error('Error in notifyUploadComplete:', error);
             reply.code(500).send({ message: 'Server error while processing upload notification' });
+        }
+    },
+
+    /**
+     * Webhook endpoint for video processing completion
+     * This should be called by the Python processor after video analysis is complete
+     * It invalidates the cache for the processed video to ensure fresh data
+     */
+    videoProcessed: async (req, reply) => {
+        if (!req.params.video_id) {
+            reply.code(400).send({ message: 'No video id provided' });
+            return;
+        }
+
+        try {
+            const video_id = req.params.video_id;
+            
+            // Verify the video exists
+            const video = await db.videos.findById(video_id);
+            if (!video) {
+                reply.code(404).send({ message: 'Video not found' });
+                return;
+            }
+
+            // Invalidate both query cache and interval tree cache for this video
+            queryCache.invalidateVideo(video_id);
+            queryProcessor.intervalTreeCache.invalidate(video_id);
+
+            console.log(`Query cache and interval tree cache invalidated for processed video: ${video_id}`);
+
+            return { 
+                success: true,
+                message: 'Video processing acknowledged and caches invalidated',
+                video_id: video_id,
+                query_cache_invalidated: true,
+                interval_tree_cache_invalidated: true,
+                timestamp: new Date().toISOString()
+            };
+        } catch (error) {
+            console.error('Error in videoProcessed webhook:', error);
+            reply.code(500).send({ message: 'Server error while processing video completion notification' });
         }
     }
 };

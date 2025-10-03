@@ -257,4 +257,8 @@ class IntervalTree {
   }
 }
 
-module.exports = IntervalTree; 
+// Named exports
+export { IntervalTreeNode, IntervalTree };
+
+// Default export
+export default IntervalTree; 
