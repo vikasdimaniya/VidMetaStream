@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCors from '@fastify/cors';
 import videoRoutes from './src/routes/video.js';
+import queryRoutes from './src/routes/query-processor.js';
 import db from './src/db.js';
 import dotenv from 'dotenv';
 import { mcpServer } from './src/mcp-server.js';
@@ -23,6 +24,7 @@ await db.connectDB();
 
 // Register routes
 await videoRoutes(fastify);
+await queryRoutes(fastify);
 
 // Start the server
 const start = async () => {

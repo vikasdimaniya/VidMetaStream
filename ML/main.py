@@ -90,7 +90,7 @@ def find_and_update_task(model_name: str = "yolo",
                             # Update the status to 'processed'
                             videos_collection.update_one(
                                 {"_id": result.get("_id")},
-                                {"$set": {"status": "processed", "annotated_path": annotated_path}}
+                                {"$set": {"status": "analyzed", "annotated_path": annotated_path}}
                             )
                         except Exception as e:
                             logger.error(f"Error processing video: {e}", exc_info=True)

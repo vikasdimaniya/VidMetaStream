@@ -24,6 +24,7 @@ import pagination from '../utils/pagination.js';
 import { ApiError } from '../utils/errors.js';
 import logger from '../utils/logger.js';
 import db from '../db.js';
+import { interpretRelativeArea } from '../utils/spatial-utils.js';
 
 /**
  * Get paginated spatial objects
@@ -71,7 +72,6 @@ async function paginatedSpatialObjects(req, reply) {
           area = JSON.parse(area);
         } else {
           // It's a named area, use the interpretRelativeArea function
-          const interpretRelativeArea = require('../utils/area-interpreter').interpretRelativeArea;
           area = interpretRelativeArea(area);
           if (!area) {
             throw new ApiError(`Invalid area description: ${area}`, 400);
@@ -165,15 +165,27 @@ async function paginatedInstances(req, reply) {
     // Get total count
     const totalCount = await db.objects.countDocuments(query);
     
-    // Get paginated results
-    const cursor = db.objects.find(query);
-    const paginatedResult = await pagination.paginateCursor(cursor, { page, limit });
+    // Get paginated results using Mongoose (not native cursor)
+    const skip = (page - 1) * limit;
+    const results = await db.objects.find(query)
+      .skip(skip)
+      .limit(limit)
+      .lean() // Return plain JavaScript objects instead of Mongoose documents
+      .exec();
+    
+    // Create pagination metadata
+    const paginationMeta = {
+      total: totalCount,
+      page,
+      limit,
+      pages: Math.ceil(totalCount / limit)
+    };
     
     // Create pagination links
     const baseUrl = '/query/queryInstancesPaginated';
     const paginatedResponse = pagination.addPaginationLinks(
-      paginatedResult.results,
-      paginatedResult.pagination,
+      results,
+      paginationMeta,
       baseUrl
     );
     
@@ -183,12 +195,10 @@ async function paginatedInstances(req, reply) {
       page,
       limit,
       totalResults: totalCount,
-      returnedResults: paginatedResult.results.length
+      returnedResults: results.length
     });
     
-    return reply.send({
-      [object]: paginatedResponse
-    });
+    return reply.send(paginatedResponse);
   } catch (error) {
     logger.error(`Error in paginated instances query: ${error.message}`, {
       stack: error.stack

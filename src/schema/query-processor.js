@@ -65,7 +65,30 @@ const instancesAtTimeSchema = {
           time: { type: 'number' },
           instances: { 
             type: 'array',
-            items: { type: 'object' }
+            items: {
+              type: 'object',
+              properties: {
+                video_id: { type: 'string' },
+                instance_id: { type: 'string' },
+                object_name: { type: 'string' },
+                start_time: { type: 'number' },
+                end_time: { type: 'number' },
+                frame_at_time: {
+                  type: 'object',
+                  properties: {
+                    timestamp: { type: 'number' },
+                    relative_position: {
+                      type: 'array',
+                      items: { type: 'number' }
+                    },
+                    bounding_box: {
+                      type: 'array',
+                      items: { type: 'number' }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

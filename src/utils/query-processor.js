@@ -321,7 +321,7 @@ const getInstancesByObjectAndTime = async (object_name, time) => {
     const results = [];
 
     documents.forEach((doc) => {
-        const { video_id, start_time, end_time, _id: instance_id } = doc;
+        const { video_id, start_time, end_time, _id: instance_id, frames, object_name: objName } = doc;
 
         // Safely normalize start_time and end_time handling Decimal128, null, and undefined
         const normalizedStartTime = start_time?.$numberDecimal 
@@ -340,14 +340,42 @@ const getInstancesByObjectAndTime = async (object_name, time) => {
 
         // Check if the time falls within the object's time range
         if (time >= normalizedStartTime && time <= normalizedEndTime) {
+            // Find the frame closest to the requested time
+            let closestFrame = null;
+            let minDiff = Infinity;
+            
+            if (frames && frames.length > 0) {
+                frames.forEach(frame => {
+                    const frameTime = frame.timestamp?.$numberDecimal 
+                        ? parseFloat(frame.timestamp.$numberDecimal) 
+                        : parseFloat(frame.timestamp);
+                    
+                    if (!isNaN(frameTime)) {
+                        const diff = Math.abs(frameTime - time);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            closestFrame = {
+                                timestamp: frameTime,
+                                relative_position: frame.relative_position,
+                                bounding_box: frame.bounding_box
+                            };
+                        }
+                    }
+                });
+            }
+
             results.push({
-                video_id,
-                instance_id,
+                video_id: video_id.toString(),
+                instance_id: instance_id.toString(),
+                object_name: objName,
+                start_time: normalizedStartTime,
+                end_time: normalizedEndTime,
+                frame_at_time: closestFrame
             });
         }
     });
 
-    console.log(`Matching instances for object_name=${object_name} at time=${time.toFixed(3)} seconds:`, results);
+    // console.log(`Matching instances for object_name=${object_name} at time=${time.toFixed(3)} seconds:`, results);
 
     return results;
 };
@@ -828,7 +856,7 @@ const queryProcessorUtils = {
     // Fixed to properly handle multiple videos
     querySpatialObjectsAnd: async ({ objects, area }) => {
         // Step 1: Use the existing querySpatialObjects function to get all valid windows
-        const allObjectsWindows = await module.exports.querySpatialObjects({ objects, area });
+        const allObjectsWindows = await queryProcessorUtils.querySpatialObjects({ objects, area });
     
         // Step 2: Group by video_id first
         const windowsByVideo = {};
@@ -960,14 +988,14 @@ const queryProcessorUtils = {
                 // Check if all objects in the sequence are present in this video
                 if (sequence.every(obj => videoData[obj] && videoData[obj].length > 0)) {
                     // Find sequences where objects appear in order
-                    const sequenceWindows = module.exports.findSequentialAppearances(videoData, sequence, windowSize);
+                    const sequenceWindows = queryProcessorUtils.findSequentialAppearances(videoData, sequence, windowSize);
                     
                     if (sequenceWindows.length > 0) {
                         results.push({
                             video_id: videoId,
                             windows: sequenceWindows.map(window => ({
-                                start_time: module.exports.formatTimestamp(window.start_time),
-                                end_time: module.exports.formatTimestamp(window.end_time)
+                                start_time: queryProcessorUtils.formatTimestamp(window.start_time),
+                                end_time: queryProcessorUtils.formatTimestamp(window.end_time)
                             }))
                         });
                     }

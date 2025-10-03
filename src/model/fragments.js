@@ -1,10 +1,24 @@
 import { createModel } from 'mongoose-gridfs';
 import mongoose from 'mongoose';
 
-const mongooseGridFS = createModel({
-    modelName: 'Fragment',
-    bucketName: 'Fragments',
-    connection: mongoose.connection,
-});
+// Lazy initialization - only create GridFS model when first accessed
+let mongooseGridFS = null;
 
-export default mongooseGridFS;
+const getFragmentsModel = () => {
+    if (!mongooseGridFS) {
+        // Check if connection is ready
+        if (mongoose.connection.readyState === 0) {
+            throw new Error('Database connection not established. Call connectDB() first.');
+        }
+        
+        mongooseGridFS = createModel({
+            modelName: 'Fragment',
+            bucketName: 'Fragments',
+            connection: mongoose.connection,
+        });
+    }
+    return mongooseGridFS;
+};
+
+// Export the getter function as default
+export default getFragmentsModel;

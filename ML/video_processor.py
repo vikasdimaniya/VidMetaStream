@@ -13,8 +13,15 @@ from tqdm import tqdm
 import boto3
 from botocore.config import Config as BotoCoreConfig
 from dotenv import load_dotenv
-import supervision as sv
-from inference.models.yolo_world.yolo_world import YOLOWorld
+
+# Optional imports for YOLO-World (requires inference package)
+try:
+    import supervision as sv
+    from inference.models.yolo_world.yolo_world import YOLOWorld
+    YOLO_WORLD_AVAILABLE = True
+except ImportError:
+    YOLO_WORLD_AVAILABLE = False
+    print("Warning: YOLO-World not available. Using regular YOLO from Ultralytics instead.")
 
 # Add the project root to Python path when running directly
 if __name__ == "__main__":
@@ -65,7 +72,7 @@ class VideoProcessor:
     Video processor for object detection and tracking
     """
     
-    def __init__(self, model_name: str = "yolo_world", model_path: Optional[str] = None, 
+    def __init__(self, model_name: str = "yolo", model_path: Optional[str] = None, 
                  device: str = "cpu", confidence_threshold: float = 0.25, 
                  timeout_threshold: int = 2000, iou_threshold: float = 0.3,
                  **kwargs: Any) -> None:
@@ -73,32 +80,50 @@ class VideoProcessor:
         Initialize the video processor
         
         Args:
-            model_name: Name of the model to use
-            model_path: Path to the model weights
+            model_name: Name of the model to use ('yolo' or 'yolo_world')
+            model_path: Path to the model weights (default: yolo11n.pt for YOLO)
             device: Device to run inference on ('cpu' or 'cuda')
             confidence_threshold: Minimum confidence threshold for detections
             timeout_threshold: Timeout threshold for tracking in milliseconds
             iou_threshold: IoU threshold for tracking
             **kwargs: Additional model-specific parameters
         """
-        # Initialize YOLO-World model
-        self.model = YOLOWorld(model_id="yolo_world/l")
+        from ML.models.yolo_detector import YOLODetector
         
-        # Load custom classes
-        classes_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "classes.csv")
-        try:
-            with open(classes_path, "r") as f:
-                self.class_list = [line.strip() for line in f if line.strip()]
+        self.model_name = model_name
+        self.use_yolo_world = model_name == "yolo_world" and YOLO_WORLD_AVAILABLE
+        
+        if self.use_yolo_world:
+            # Initialize YOLO-World model
+            logger.info("Initializing YOLO-World model")
+            self.model = YOLOWorld(model_id="yolo_world/l")
             
-            # Set custom classes
-            self.model.set_classes(self.class_list)
-            logger.info(f"Loaded {len(self.class_list)} custom classes for YOLO-World model")
-        except Exception as e:
-            logger.error(f"Failed to load custom classes: {str(e)}")
-            
-        # Initialize annotators
-        self.box_annotator = sv.BoxAnnotator(thickness=2)
-        self.label_annotator = sv.LabelAnnotator()
+            # Load custom classes
+            classes_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "classes.csv")
+            try:
+                with open(classes_path, "r") as f:
+                    self.class_list = [line.strip() for line in f if line.strip()]
+                
+                # Set custom classes
+                self.model.set_classes(self.class_list)
+                logger.info(f"Loaded {len(self.class_list)} custom classes for YOLO-World model")
+            except Exception as e:
+                logger.error(f"Failed to load custom classes: {str(e)}")
+                
+            # Initialize annotators
+            self.box_annotator = sv.BoxAnnotator(thickness=2)
+            self.label_annotator = sv.LabelAnnotator()
+        else:
+            # Initialize regular YOLO model (Ultralytics)
+            if model_path is None:
+                model_path = "yolo11n.pt"  # Default to YOLO11 nano model
+            logger.info(f"Initializing Ultralytics YOLO model from {model_path}")
+            self.model = YOLODetector(
+                model_path=model_path,
+                device=device,
+                confidence_threshold=confidence_threshold,
+                **kwargs
+            )
         
         self.device = device
         self.confidence_threshold = confidence_threshold
@@ -158,11 +183,21 @@ class VideoProcessor:
                 if not ret:
                     break
 
-                # Run object detection with YOLO-World
-                results = self.model.infer(frame)
+                # Run object detection
+                if self.use_yolo_world:
+                    # YOLO-World path
+                    results = self.model.infer(frame)
+                    detections = sv.Detections.from_inference(results)
+                else:
+                    # Ultralytics YOLO path
+                    results = self.model.predict(frame, verbose=False)
+                    # Extract detections manually
+                    detections = self._extract_detections_from_yolo(results, frame)
+                    # Clean up YOLO results to free memory
+                    del results
                 
-                # Convert results to supervision Detections
-                detections = sv.Detections.from_inference(results)
+                # Convert frame to RGB for annotation (if needed)
+                # This helps manage memory by not keeping multiple copies
                 
                 # Extract frame timestamp
                 timestamp_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
@@ -178,7 +213,15 @@ class VideoProcessor:
                         if confidence < self.confidence_threshold:
                             continue
                             
-                        box_coordinates = detections.xyxy[i].tolist()
+                        # Safely convert box coordinates to list
+                        box_coords = detections.xyxy[i]
+                        if hasattr(box_coords, 'tolist'):
+                            box_coordinates = box_coords.tolist()
+                        elif hasattr(box_coords, 'cpu'):
+                            box_coordinates = box_coords.cpu().numpy().tolist()
+                        else:
+                            box_coordinates = list(box_coords)
+                        
                         label = detections.data.get('class_name', [])[i] if 'class_name' in detections.data else "unknown"
                         
                         relative_position = calculate_relative_position(box_coordinates, frame_width, frame_height)
@@ -259,6 +302,9 @@ class VideoProcessor:
 
                 # Write the annotated frame to the output video
                 out.write(annotated_frame)
+                
+                # Clean up frame and annotated frame to free memory
+                del annotated_frame
 
                 # Remove expired objects (based on timeout threshold)
                 for label, instances in list(active_objects.items()):
@@ -274,6 +320,12 @@ class VideoProcessor:
 
                 # Update the progress bar
                 pbar.update(1)
+                
+                # Periodic memory cleanup to prevent OOM
+                if frame_number % 100 == 0:
+                    import gc
+                    gc.collect()  # Force garbage collection every 100 frames
+                    logger.debug(f"Performed garbage collection at frame {frame_number}")
 
         # Release resources
         cap.release()
@@ -284,29 +336,73 @@ class VideoProcessor:
     
     def annotate_frame(self, frame, detections):
         """
-        Draw bounding boxes and labels on the frame based on detection results using supervision.
+        Draw bounding boxes and labels on the frame based on detection results.
+        Supports both YOLO-World (with supervision) and Ultralytics YOLO.
         """
-        # Generate labels for each detection
-        labels = [
-            f"{detections.data['class_name'][i]} {detections.confidence[i]:.2f}"
-            for i in range(len(detections)) if detections.confidence[i] >= self.confidence_threshold
-        ]
-        
-        # Filter detections based on confidence threshold
-        mask = detections.confidence >= self.confidence_threshold
-        filtered_detections = detections[mask]
-        filtered_labels = [labels[i] for i, include in enumerate(mask) if include]
-        
-        # Annotate frame with bounding boxes
-        annotated_frame = self.box_annotator.annotate(scene=frame.copy(), detections=filtered_detections)
-        
-        # Annotate frame with labels
-        if len(filtered_detections) > 0:
-            annotated_frame = self.label_annotator.annotate(
-                scene=annotated_frame, 
-                detections=filtered_detections, 
-                labels=filtered_labels
-            )
+        if self.use_yolo_world:
+            # YOLO-World annotation using supervision
+            labels = [
+                f"{detections.data['class_name'][i]} {detections.confidence[i]:.2f}"
+                for i in range(len(detections)) if detections.confidence[i] >= self.confidence_threshold
+            ]
+            
+            # Filter detections based on confidence threshold
+            mask = detections.confidence >= self.confidence_threshold
+            filtered_detections = detections[mask]
+            filtered_labels = [labels[i] for i, include in enumerate(mask) if include]
+            
+            # Annotate frame with bounding boxes
+            annotated_frame = self.box_annotator.annotate(scene=frame.copy(), detections=filtered_detections)
+            
+            # Annotate frame with labels
+            if len(filtered_detections) > 0:
+                annotated_frame = self.label_annotator.annotate(
+                    scene=annotated_frame, 
+                    detections=filtered_detections, 
+                    labels=filtered_labels
+                )
+        else:
+            # Ultralytics YOLO annotation
+            import cv2
+            annotated_frame = frame.copy()
+            
+            for i in range(len(detections)):
+                if detections.confidence[i] < self.confidence_threshold:
+                    continue
+                    
+                # Extract box coordinates
+                x1, y1, x2, y2 = map(int, detections.xyxy[i])
+                label = detections.data['class_name'][i]
+                confidence = detections.confidence[i]
+                
+                # Draw rectangle
+                cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # Prepare label text
+                label_text = f"{label} {confidence:.2f}"
+                
+                # Draw label background
+                (text_width, text_height), baseline = cv2.getTextSize(
+                    label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+                )
+                cv2.rectangle(
+                    annotated_frame,
+                    (x1, y1 - text_height - baseline),
+                    (x1 + text_width, y1),
+                    (0, 255, 0),
+                    -1
+                )
+                
+                # Draw label text
+                cv2.putText(
+                    annotated_frame,
+                    label_text,
+                    (x1, y1 - baseline),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 0, 0),
+                    1
+                )
         
         return annotated_frame
     
@@ -347,9 +443,49 @@ class VideoProcessor:
             
         return extracted_detections
     
+    def _extract_detections_from_yolo(self, results, frame):
+        """
+        Extract detections from Ultralytics YOLO results
+        
+        Args:
+            results: YOLO prediction results
+            frame: Input frame
+            
+        Returns:
+            Detection object compatible with the processing pipeline
+        """
+        import numpy as np
+        
+        class SimpleDetections:
+            """Simple detection container for compatibility"""
+            def __init__(self):
+                self.xyxy = []
+                self.confidence = []
+                self.class_id = []
+                self.data = {'class_name': []}
+            
+            def __len__(self):
+                return len(self.xyxy)
+        
+        detections = SimpleDetections()
+        
+        for result in results:
+            if result.boxes is None or len(result.boxes) == 0:
+                continue
+                
+            for box in result.boxes:
+                # Convert tensors to numpy arrays and then to lists to avoid memory issues
+                xyxy = box.xyxy[0].cpu().numpy() if hasattr(box.xyxy[0], 'cpu') else np.array(box.xyxy[0])
+                detections.xyxy.append(xyxy)
+                detections.confidence.append(float(box.conf[0].cpu() if hasattr(box.conf[0], 'cpu') else box.conf[0]))
+                detections.class_id.append(int(box.cls[0].cpu() if hasattr(box.cls[0], 'cpu') else box.cls[0]))
+                detections.data['class_name'].append(self.model.get_label(int(box.cls[0])))
+        
+        return detections
+    
     def predict(self, frame):
         """
-        Run object detection on a single frame using YOLO-World
+        Run object detection on a single frame
         
         Args:
             frame: Input frame
@@ -357,7 +493,10 @@ class VideoProcessor:
         Returns:
             Detection results
         """
-        return self.model.infer(frame)
+        if self.use_yolo_world:
+            return self.model.infer(frame)
+        else:
+            return self.model.predict(frame, verbose=False)
 
 
 # Helper functions

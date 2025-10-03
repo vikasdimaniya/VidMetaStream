@@ -29,7 +29,7 @@ class Config:
     MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", str(1024 * 1024 * 100)))  # 100MB
     
     # Logging configuration
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()  # Ensure uppercase
     LOG_DIR = os.getenv("LOG_DIR", "logs")
     
     # Model configuration

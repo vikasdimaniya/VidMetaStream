@@ -149,7 +149,7 @@ async function videoRoutes(app) {
         handler: queryProcessorAPIs.downloadVideoChunk
     });
     
-    app.get('/query/tempral/objects', {
+    app.get('/query/temporal/objects', {
         ...querySchemas.querySequenceSchema,
         handler: queryProcessorAPIs.querySequence
     });

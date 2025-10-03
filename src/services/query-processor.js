@@ -84,7 +84,7 @@ const queryService = {
             const results = await db.objects.find({ object_name: { $in: objects } });
 
             // Log the raw results
-            console.log("Query results:", results);
+            // console.log("Query results:", results);
 
             // Transform the results to the desired structure
             const transformedResults = results.map((result) => ({

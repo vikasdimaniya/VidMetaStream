@@ -1,4 +1,16 @@
-// src/api/query-processor
+/**
+ * VIDEO QUERY API HANDLERS
+ * 
+ * This module provides all API handlers for querying video content based on:
+ * - SPATIAL criteria (where objects appear in frame)
+ * - TEMPORAL criteria (when objects appear in time)
+ * - OBJECT RELATIONSHIPS (objects appearing together)
+ * - SEQUENCES (objects appearing in specific order)
+ * 
+ * All handlers return time windows where query criteria are met,
+ * enabling extraction of relevant video segments.
+ */
+
 import path from 'path';
 import queryProcessorUtils from '../utils/query-processor.js';
 import { ApiError } from '../utils/errors.js';
@@ -11,7 +23,40 @@ import {
 } from '../utils/spatial-utils.js';
 
 /**
- * Query for instances of objects that overlap in a specific area
+ * QUERY INSTANCE OVERLAPS IN SPECIFIC AREA
+ * 
+ * PURPOSE: Find time periods when N or more instances of the SAME object
+ * appear simultaneously in a specific screen area.
+ * 
+ * USE CASE: "Show me when at least 2 cars are in the parking area"
+ * 
+ * WHAT IT DOES:
+ * 1. First finds all time periods when N+ instances overlap (any location)
+ * 2. For each overlap period, checks frame-by-frame position data
+ * 3. Counts instances that fall within the specified area at each frame
+ * 4. Only keeps periods where N+ instances are in the area
+ * 5. Returns filtered time intervals
+ * 
+ * INPUT PARAMETERS:
+ * - object: Name of object type to search (e.g., "car", "person")
+ * - count: Minimum number of simultaneous instances required (integer >= 2)
+ * - area: Screen region - named (e.g., "top-left") or coordinates [x1,y1,x2,y2]
+ * 
+ * RETURNS:
+ * {
+ *   success: true,
+ *   data: [
+ *     {
+ *       video_id: "video123",
+ *       success_intervals: [
+ *         { start: "10.500", end: "15.800" }  // Seconds as strings
+ *       ]
+ *     }
+ *   ]
+ * }
+ * 
+ * ALGORITHM: Overlap detection + spatial filtering + frame-by-frame verification
+ * COMPLEXITY: O(n log n) for overlaps + O(f) for frame verification
  */
 async function queryInstanceOverlapsInArea(req, reply) {
     try {
@@ -112,7 +157,33 @@ async function queryInstanceOverlapsInArea(req, reply) {
 }
 
 /**
- * Query for instances of objects at a specific time
+ * QUERY INSTANCES AT SPECIFIC TIME
+ * 
+ * PURPOSE: Retrieve all instances of an object that exist at a specific moment in time.
+ * 
+ * USE CASE: "What 'person' instances are visible at exactly 15.5 seconds?"
+ * 
+ * WHAT IT DOES:
+ * 1. Queries database for all instances of the specified object
+ * 2. Filters instances where: start_time <= target_time <= end_time
+ * 3. Returns matching instance details
+ * 
+ * INPUT PARAMETERS:
+ * - object: Name of object type (e.g., "person", "car")
+ * - time: Target timestamp in seconds (e.g., 15.5)
+ * 
+ * RETURNS:
+ * {
+ *   object: "person",
+ *   time: 15.5,
+ *   instances: [
+ *     { video_id: "video123", instance_id: "inst1", ... },
+ *     { video_id: "video123", instance_id: "inst2", ... }
+ *   ]
+ * }
+ * 
+ * ALGORITHM: Linear scan with time interval check
+ * COMPLEXITY: O(n) where n = total instances
  */
 async function queryInstancesAtTime(req, reply) {
     try {
@@ -154,7 +225,41 @@ async function queryInstancesAtTime(req, reply) {
 }
 
 /**
- * Query for objects in a specific area during a time range
+ * QUERY SPATIAL OBJECTS WITH TEMPORAL CONSTRAINT
+ * 
+ * PURPOSE: Find when ANY specified object appears in a specific screen area
+ * within a given time range.
+ * 
+ * USE CASE: "Show me when a 'car' appears in the right-half between 10-30 seconds"
+ * 
+ * WHAT IT DOES:
+ * 1. Performs spatial query (finds objects in specified area)
+ * 2. Filters results to only include time windows overlapping [start_time, end_time]
+ * 3. Clips window boundaries to fit within time range
+ * 4. Returns filtered and clipped time windows per object
+ * 
+ * INPUT PARAMETERS:
+ * - objects: Array of object names (e.g., ["car", "truck"])
+ * - area: Screen region - named or coordinates [x1,y1,x2,y2]
+ * - start_time: Start of time range in seconds
+ * - end_time: End of time range in seconds
+ * 
+ * RETURNS:
+ * [
+ *   {
+ *     video_id: "video123",
+ *     object_name: "car",
+ *     windows: [
+ *       {
+ *         start_time: "00:00:12.000",  // Clipped to time range
+ *         end_time: "00:00:25.500"
+ *       }
+ *     ]
+ *   }
+ * ]
+ * 
+ * ALGORITHM: Spatial filtering + temporal window intersection and clipping
+ * COMPLEXITY: O(n × f) where n=objects, f=frames, plus O(w) for window filtering
  */
 async function querySpatialObjectsTemporal(req, reply) {
     try {
@@ -264,10 +369,45 @@ async function querySpatialObjectsTemporal(req, reply) {
 }
 
 /**
- * Query videos for objects appearing together
- * @param {Object} req - Request object
- * @param {Object} reply - Reply object
- * @returns {Array} - List of video sections where all the objects are seen together
+ * QUERY VIDEOS WHERE OBJECTS APPEAR TOGETHER
+ * 
+ * PURPOSE: Find time windows in videos where ALL specified objects appear simultaneously
+ * (anywhere in the frame - no spatial constraint).
+ * 
+ * USE CASE: "Show me video segments where 'person', 'car', and 'dog' all appear together"
+ * 
+ * WHAT IT DOES:
+ * 1. Fetches all instances of each specified object
+ * 2. Groups instances by video_id
+ * 3. For each video:
+ *    a. Checks that ALL objects appear at some point
+ *    b. Finds time periods where ALL objects' instances overlap
+ *    c. Computes intersection: max(all starts) to min(all ends)
+ * 4. Optionally filters by maximum window_size
+ * 5. Merges overlapping result windows
+ * 
+ * INPUT PARAMETERS:
+ * - objects: Array of object names (e.g., ["person", "car", "dog"])
+ * - window_size: (Optional) Maximum duration of returned windows in seconds
+ * 
+ * RETURNS:
+ * [
+ *   {
+ *     video_id: "video123",
+ *     windows: [
+ *       {
+ *         start_time: 5.0,
+ *         end_time: 15.3
+ *       }
+ *     ]
+ *   }
+ * ]
+ * 
+ * ALGORITHM: Time window intersection with optional size filtering
+ * COMPLEXITY: O(n × m) where n=videos, m=average instances per object
+ * 
+ * NOTE: This checks temporal overlap only. For spatial constraints,
+ * use querySpatialObjectsAnd instead.
  */
 async function queryVideos(req, reply) {
     try {
@@ -309,9 +449,51 @@ async function queryVideos(req, reply) {
 }
 
 /**
- * Query for objects in specific areas
- * @param {Object} req - Request object
- * @param {Object} reply - Reply object
+ * QUERY SPATIAL OBJECTS (OR LOGIC)
+ * 
+ * PURPOSE: Find time windows when ANY of the specified objects appear in a specific screen area.
+ * 
+ * USE CASE: "Show me when a 'person' OR a 'dog' appears in the top-left quadrant"
+ * 
+ * WHAT IT DOES:
+ * 1. For EACH object independently:
+ *    a. Checks every frame's position data
+ *    b. Marks timestamps where object's bounding box intersects with specified area
+ *    c. Groups consecutive timestamps into continuous time windows
+ * 2. Merges overlapping windows for each object
+ * 3. Returns separate results per object per video
+ * 
+ * INPUT PARAMETERS:
+ * - objects: Array of object names (e.g., ["person", "dog"])
+ * - area: Screen region - named (e.g., "top-left") or coordinates [x1,y1,x2,y2]
+ *   
+ *   Named areas: "top-half", "bottom-half", "left-half", "right-half",
+ *                "top-left", "top-right", "bottom-left", "bottom-right", etc.
+ *   
+ *   Coordinates: [x1, y1, x2, y2] where values are 0.0-1.0 (relative to frame size)
+ *                Example: [0.0, 0.0, 0.5, 0.5] = top-left quarter
+ * 
+ * RETURNS:
+ * [
+ *   {
+ *     video_id: "video123",
+ *     object_name: "person",
+ *     windows: [
+ *       {
+ *         start_time: "00:00:05.000",
+ *         end_time: "00:00:15.300"
+ *       }
+ *     ]
+ *   },
+ *   {
+ *     video_id: "video123",
+ *     object_name: "dog",
+ *     windows: [...]
+ *   }
+ * ]
+ * 
+ * ALGORITHM: Frame-by-frame spatial filtering with window merging
+ * COMPLEXITY: O(n × f) where n=number of objects, f=number of frames
  */
 async function querySpatialObjects(req, reply) {
     try {
@@ -389,9 +571,48 @@ async function querySpatialObjects(req, reply) {
 }
 
 /**
- * Query for objects that satisfy multiple spatial conditions (AND)
- * @param {Object} req - Request object
- * @param {Object} reply - Reply object
+ * QUERY SPATIAL OBJECTS (AND LOGIC)
+ * 
+ * PURPOSE: Find time windows when ALL specified objects appear TOGETHER in a specific screen area.
+ * 
+ * USE CASE: "Show me when BOTH a 'person' AND a 'dog' are in the bottom-right corner simultaneously"
+ * 
+ * WHAT IT DOES:
+ * 1. Calls querySpatialObjects to get time windows for EACH object in the area
+ * 2. Groups results by video_id
+ * 3. For each video:
+ *    a. Checks if ALL objects have at least one window
+ *    b. Computes TIME INTERSECTION of all object windows
+ *    c. Only returns periods where ALL objects are present in area simultaneously
+ * 4. Returns videos where all criteria met
+ * 
+ * INPUT PARAMETERS:
+ * - objects: Array of object names (e.g., ["person", "dog"]) - ALL must be present
+ * - area: Screen region - named or coordinates [x1,y1,x2,y2]
+ * 
+ * RETURNS:
+ * [
+ *   {
+ *     video_id: "video123",
+ *     objects: [
+ *       {
+ *         object_names: ["person", "dog"],
+ *         windows: [
+ *           {
+ *             start_time: "00:00:10.000",  // Both objects present here
+ *             end_time: "00:00:12.500"
+ *           }
+ *         ]
+ *       }
+ *     ]
+ *   }
+ * ]
+ * 
+ * ALGORITHM: Spatial filtering + time window intersection (multi-video aware)
+ * COMPLEXITY: O(n × f) for spatial + O(w²) for intersection where w=windows
+ * 
+ * NOTE: This is stricter than querySpatialObjects - ALL objects must be present,
+ * not just ANY. Returns empty if any object is missing from the area.
  */
 async function querySpatialObjectsAnd(req, reply) {
     try {
@@ -466,9 +687,43 @@ async function querySpatialObjectsAnd(req, reply) {
 }
 
 /**
- * Query for distinct instances of objects
- * @param {Object} req - Request object
- * @param {Object} reply - Reply object
+ * QUERY DISTINCT INSTANCES
+ * 
+ * PURPOSE: Retrieve all distinct occurrences (instances) of a specific object across all videos.
+ * 
+ * USE CASE: "Give me a list of all 'person' appearances with their time ranges"
+ * 
+ * WHAT IT DOES:
+ * 1. Queries database for ALL instances of the specified object
+ * 2. Returns complete instance information including:
+ *    - Instance ID
+ *    - Video ID
+ *    - Start and end timestamps
+ *    - Frame-level position data
+ * 3. Each instance represents one continuous appearance of the object
+ * 
+ * INPUT PARAMETERS:
+ * - object: Name of object type to retrieve (e.g., "person", "car")
+ * 
+ * RETURNS:
+ * {
+ *   "person": [
+ *     {
+ *       "_id": "instance_id_1",
+ *       "video_id": "video123",
+ *       "object_name": "person",
+ *       "start_time": 5.0,
+ *       "end_time": 15.0,
+ *       "frames": [...]
+ *     },
+ *     {...}
+ *   ]
+ * }
+ * 
+ * ALGORITHM: Direct database query with projection
+ * COMPLEXITY: O(n) where n=number of instances
+ * 
+ * USE CASES: Frequency analysis, object distribution, training data collection
  */
 async function queryInstances(req, reply) {
     try {
@@ -508,9 +763,49 @@ async function queryInstances(req, reply) {
 }
 
 /**
- * Query for overlaps of the same object class
- * @param {Object} req - Request object
- * @param {Object} reply - Reply object
+ * QUERY INSTANCE OVERLAPS
+ * 
+ * PURPOSE: Find time periods when N or more instances of the SAME object
+ * appear simultaneously in the video (anywhere on screen).
+ * 
+ * USE CASE: "Show me when at least 3 people are visible at the same time"
+ * 
+ * WHAT IT DOES:
+ * 1. Fetches all instances of the specified object
+ * 2. Uses sweep-line algorithm to find overlaps:
+ *    a. Creates events for each instance start/end
+ *    b. Sorts events by timestamp
+ *    c. Sweeps through, tracking active instances
+ *    d. When active count >= threshold, records overlap period
+ * 3. Merges overlapping result periods
+ * 4. Groups results by video_id
+ * 
+ * INPUT PARAMETERS:
+ * - object: Name of object type (e.g., "person", "car")
+ * - count: Minimum number of simultaneous instances required (integer >= 2)
+ * 
+ * RETURNS:
+ * {
+ *   "person": [
+ *     {
+ *       "video_id": "video123",
+ *       "merged_overlaps": [
+ *         {
+ *           "start_time": 10.5,
+ *           "end_time": 15.8
+ *         }
+ *       ]
+ *     }
+ *   ]
+ * }
+ * 
+ * ALGORITHM: Sweep-line algorithm with event-based processing
+ * COMPLEXITY: O(n log n) where n=number of instances (optimal)
+ * 
+ * USE CASES: Crowd detection, traffic density, multi-player scenarios
+ * 
+ * NOTE: This checks only temporal overlap. For spatial constraints,
+ * use queryInstanceOverlapsInArea instead.
  */
 async function queryInstanceOverlaps(req, reply) {
     try {
@@ -648,9 +943,54 @@ async function downloadVideoChunk(req, reply) {
 }
 
 /**
- * Query for sequences of objects appearing in order
- * @param {Object} req - Request object
- * @param {Object} reply - Reply object
+ * QUERY SEQUENCE
+ * 
+ * PURPOSE: Find video segments where objects appear in a specific sequential order.
+ * 
+ * USE CASE: "Show me when a 'person' appears, THEN a 'car', THEN a 'dog' in that order"
+ * 
+ * WHAT IT DOES:
+ * 1. Fetches all instances of each object in the sequence
+ * 2. Sorts instances by start_time within each video
+ * 3. For each video, attempts to match the sequence:
+ *    a. For each instance of first object
+ *    b. Find CLOSEST instance of second object that starts AFTER first ends
+ *    c. Continue for all objects in sequence
+ *    d. Track total time span from first start to last end
+ * 4. Filters sequences by window_size if specified
+ * 5. Returns matched sequences with time spans
+ * 
+ * INPUT PARAMETERS:
+ * - sequence: Array of object names IN ORDER (e.g., ["person", "car", "dog"])
+ * - window_size: (Optional) Maximum duration of entire sequence in seconds
+ * 
+ * RETURNS:
+ * [
+ *   {
+ *     "video_id": "video123",
+ *     "windows": [
+ *       {
+ *         "start_time": "00:00:05.000",  // First object starts
+ *         "end_time": "00:00:18.500"     // Last object ends
+ *       }
+ *     ]
+ *   }
+ * ]
+ * 
+ * ALGORITHM: Greedy closest-match sequential search
+ * COMPLEXITY: O(n × m) where n=videos, m=sequence length × avg instances
+ * 
+ * ORDERING RULES:
+ * - Each next object must START after the previous object ENDS
+ * - Selects the CLOSEST matching instance (minimum time gap)
+ * - Overlapping instances are NOT allowed in sequence
+ * 
+ * USE CASES: Behavioral analysis, activity detection, story extraction
+ * 
+ * EXAMPLES:
+ * - Sports: "Player runs, then ball flies, then goal scored"
+ * - Traffic: "Car approaches, stops, then person exits"
+ * - Wildlife: "Animal appears, eats, then leaves"
  */
 async function querySequence(req, reply) {
     try {

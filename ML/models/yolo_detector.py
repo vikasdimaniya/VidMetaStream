@@ -21,6 +21,11 @@ class YOLODetector(BaseDetector):
             device: Device to run inference on ('cpu' or 'cuda')
             **kwargs: Additional model-specific parameters
         """
+        import os
+        # Prevent multiprocessing issues that cause semaphore leaks
+        os.environ['OMP_NUM_THREADS'] = '1'
+        os.environ['MKL_NUM_THREADS'] = '1'
+        
         self.model_path = model_path
         self.device = device
         self.model = YOLO(model_path)

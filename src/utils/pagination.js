@@ -209,7 +209,17 @@ function createCursorPaginatedQuery(query, options = {}) {
   };
 }
 
-module.exports = {
+export {
+  paginateResults,
+  createPaginatedQuery,
+  paginateCursor,
+  addPaginationLinks,
+  createPaginationToken,
+  parsePaginationToken,
+  createCursorPaginatedQuery
+};
+
+export default {
   paginateResults,
   createPaginatedQuery,
   paginateCursor,

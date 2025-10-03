@@ -295,7 +295,9 @@ class SpatialIndex {
   }
 }
 
-module.exports = {
+export { QuadTree, SpatialIndex };
+
+export default {
   QuadTree,
   SpatialIndex
 }; 

@@ -5,7 +5,7 @@
 
 import mongoose from 'mongoose';
 import Objects from './model/objects.js';
-import Fragments from './model/fragments.js';
+import getFragmentsModel from './model/fragments.js';
 import Video from './model/video.js';
 
 // MongoDB connection
@@ -20,14 +20,30 @@ const connectDB = async () => {
     }
 };
 
+// Create a proxy object for Fragments that lazily initializes on any property access
+const fragmentsProxy = new Proxy({}, {
+    get(target, prop) {
+        const model = getFragmentsModel();
+        return model[prop];
+    },
+    set(target, prop, value) {
+        const model = getFragmentsModel();
+        model[prop] = value;
+        return true;
+    }
+});
+
 // Named exports for individual models and functions
-export { connectDB, Objects as objects, Fragments as fragments, Video as videos };
+export { connectDB, Objects as objects, fragmentsProxy as fragments, Video as videos };
 
 // Default export with all properties
 export default {
     connectDB,
     objects: Objects,
-    fragments: Fragments,
+    get fragments() {
+        // Use getter to ensure lazy initialization
+        return getFragmentsModel();
+    },
     videos: Video,
     connection: mongoose.connection,
     // Provide access to collection() for GridFS operations
