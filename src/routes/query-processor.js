@@ -1,8 +1,8 @@
 // src/routes/query-processor
-const queryProcessorAPIs = require("../api/query-processor.js");
-const batchQueryAPI = require("../api/batch-query.js");
-const paginatedQueryAPI = require("../api/paginated-query.js");
-const querySchemas = require("../schema/query-processor.js");
+import queryProcessorAPIs from "../api/query-processor.js";
+import batchQueryAPI from "../api/batch-query.js";
+import paginatedQueryAPI from "../api/paginated-query.js";
+import querySchemas from "../schema/query-processor.js";
 
 async function videoRoutes(app) {
     // Register global error handler
@@ -168,4 +168,4 @@ async function videoRoutes(app) {
     });
 }
 
-module.exports = videoRoutes;
+export default videoRoutes;

@@ -2,9 +2,14 @@
  * Logging utility for consistent logging throughout the application
  */
 
-const fs = require('fs');
-const path = require('path');
-const util = require('util');
+import fs from 'fs';
+import path from 'path';
+import util from 'util';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Log levels
 const LOG_LEVELS = {
@@ -107,4 +112,4 @@ const logger = {
     query: logQuery
 };
 
-module.exports = logger; 
+export default logger; 

@@ -1,12 +1,29 @@
 /**
  * Paginated query API for handling large result sets
+ * 
+ * PURPOSE: Provides pagination support for queries that may return large datasets,
+ * preventing memory overflow and improving client performance.
+ * 
+ * THREE MAIN ENDPOINTS:
+ * 
+ * 1. paginatedSpatialObjects - Get objects in an area with pagination
+ *    INPUT: objects (array), area (array or string), page, limit
+ *    RETURNS: { data: [results], pagination: { page, limit, total, pages } }
+ * 
+ * 2. paginatedInstances - Get distinct instances of an object with pagination
+ *    INPUT: object (string), page, limit
+ *    RETURNS: { data: [instances], pagination: { page, limit, total, pages } }
+ * 
+ * 3. streamResults - Stream query results (no pagination, continuous)
+ *    INPUT: objects (array)
+ *    RETURNS: Server-Sent Events stream of results
  */
 
-const queryProcessorUtils = require('../utils/query-processor');
-const pagination = require('../utils/pagination');
-const { ApiError } = require('../utils/errors');
-const logger = require('../utils/logger');
-const db = require('../db');
+import queryProcessorUtils from '../utils/query-processor.js';
+import pagination from '../utils/pagination.js';
+import { ApiError } from '../utils/errors.js';
+import logger from '../utils/logger.js';
+import db from '../db.js';
 
 /**
  * Get paginated spatial objects
@@ -271,7 +288,9 @@ async function streamResults(req, reply) {
   }
 }
 
-module.exports = {
+export { paginatedSpatialObjects, paginatedInstances, streamResults };
+
+export default {
   paginatedSpatialObjects,
   paginatedInstances,
   streamResults

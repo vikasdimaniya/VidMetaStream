@@ -50,7 +50,9 @@ class VideoProcessingError extends Error {
     }
 }
 
-module.exports = {
+export { ApiError, DatabaseError, VideoProcessingError };
+
+export default {
     ApiError,
     DatabaseError,
     VideoProcessingError

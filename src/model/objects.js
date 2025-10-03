@@ -1,4 +1,4 @@
-const mongoose  = require('mongoose');
+import mongoose from 'mongoose';
 
 const objectSchema = new mongoose.Schema({
     _id: String,
@@ -8,4 +8,5 @@ const objectSchema = new mongoose.Schema({
     end_time: Number,
     frames: Array
 });
-module.exports = mongoose.model('objects', objectSchema);
+
+export default mongoose.model('objects', objectSchema);

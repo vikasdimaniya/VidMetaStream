@@ -1,5 +1,6 @@
 'use strict';
-module.exports = {
+
+const timeWindows = {
     getTimings: function (object) {
         return {
             startTime: object.start_time,
@@ -76,4 +77,6 @@ module.exports = {
     calculateDuration: function (startTime, endTime) {
         return endTime - startTime;
     }
-}
+};
+
+export default timeWindows;

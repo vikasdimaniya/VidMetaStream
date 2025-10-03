@@ -153,7 +153,18 @@ const incrementTimestamp = (currentTimestamp) => {
     return wholePart + newFractionalPart;
 };
 
-module.exports = {
+// Export all functions
+export {
+    interpretRelativeArea,
+    validateArea,
+    isPositionInArea,
+    convertTimeToSeconds,
+    secondsToTime,
+    incrementTimestamp
+};
+
+// Default export
+export default {
     interpretRelativeArea,
     validateArea,
     isPositionInArea,

@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCors from '@fastify/cors';
 import videoRoutes from './src/routes/video.js';
-import db from './src/db/index.js';
+import db from './src/db.js';
 import dotenv from 'dotenv';
 import { mcpServer } from './src/mcp-server.js';
 

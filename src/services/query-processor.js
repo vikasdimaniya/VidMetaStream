@@ -1,4 +1,4 @@
-const db = require('../db'); // Adjust path if necessary
+import db from '../db.js';
 
 const getInstanceData = async (objects) => {
     try {
@@ -30,7 +30,7 @@ const getInstanceData = async (objects) => {
     }
 };
 
-module.exports = {
+const queryService = {
     queryVideosWithInSpecificTime: async (videoId, object, startTime, endTime) => {
         const query = {
             video_id: videoId,
@@ -108,3 +108,17 @@ module.exports = {
 
     getInstanceData,
 };
+
+// Default export
+export default queryService;
+
+// Named exports for convenience
+export const {
+    queryVideosWithInSpecificTime,
+    queryVideos,
+    getVideoFilesForTimeWindows,
+    getObjectData
+} = queryService;
+
+// Also export getInstanceData directly
+export { getInstanceData };

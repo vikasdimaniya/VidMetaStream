@@ -1,5 +1,5 @@
-const { createModel} = require('mongoose-gridfs');
-const mongoose = require('mongoose');
+import { createModel } from 'mongoose-gridfs';
+import mongoose from 'mongoose';
 
 const mongooseGridFS = createModel({
     modelName: 'Fragment',
@@ -7,4 +7,4 @@ const mongooseGridFS = createModel({
     connection: mongoose.connection,
 });
 
-module.exports = mongooseGridFS;
+export default mongooseGridFS;

@@ -1,14 +1,14 @@
 // src/api/query-processor
-const path = require('path');
-const queryProcessorUtils = require('../utils/query-processor.js');
-const { ApiError } = require('../utils/errors.js');
-const logger = require('../utils/logger.js');
-const { 
+import path from 'path';
+import queryProcessorUtils from '../utils/query-processor.js';
+import { ApiError } from '../utils/errors.js';
+import logger from '../utils/logger.js';
+import { 
     interpretRelativeArea, 
     validateArea, 
     convertTimeToSeconds, 
     secondsToTime 
-} = require('../utils/spatial-utils.js');
+} from '../utils/spatial-utils.js';
 
 /**
  * Query for instances of objects that overlap in a specific area
@@ -713,7 +713,21 @@ async function querySequence(req, reply) {
 }
 
 // Export all query handlers
-module.exports = {
+export {
+    queryInstanceOverlapsInArea,
+    queryInstancesAtTime,
+    querySpatialObjectsTemporal,
+    queryVideos,
+    querySpatialObjects,
+    querySpatialObjectsAnd,
+    queryInstances,
+    queryInstanceOverlaps,
+    getVideoChunks,
+    downloadVideoChunk,
+    querySequence
+};
+
+export default {
     queryInstanceOverlapsInArea,
     queryInstancesAtTime,
     querySpatialObjectsTemporal,

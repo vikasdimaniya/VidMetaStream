@@ -1,10 +1,26 @@
 /**
  * Batch query API for processing multiple queries in a single request
+ * 
+ * PURPOSE: Allows clients to submit multiple video queries in a single HTTP request
+ * for improved performance and reduced network overhead.
+ * 
+ * WHAT IT DOES:
+ * - Accepts up to 10 queries in one request
+ * - Executes all queries in parallel
+ * - Returns results in the same order as submitted
+ * - Handles individual query failures gracefully
+ * 
+ * RETURNS:
+ * {
+ *   results: [
+ *     { result: <query result> } or { error: <error message> }
+ *   ]
+ * }
  */
 
-const queryProcessorAPIs = require('./query-processor');
-const { ApiError } = require('../utils/errors');
-const logger = require('../utils/logger');
+import queryProcessorAPIs from './query-processor.js';
+import { ApiError } from '../utils/errors.js';
+import logger from '../utils/logger.js';
 
 /**
  * Process a batch of queries
@@ -103,6 +119,5 @@ async function batchQuery(req, reply) {
   }
 }
 
-module.exports = {
-  batchQuery
-}; 
+export { batchQuery };
+export default { batchQuery }; 

@@ -219,7 +219,21 @@ const querySequenceSchema = {
   }
 };
 
-module.exports = {
+export {
+  instanceOverlapsInAreaSchema,
+  instancesAtTimeSchema,
+  spatialObjectsTemporalSchema,
+  queryVideosSchema,
+  spatialObjectsSchema,
+  spatialObjectsAndSchema,
+  queryInstancesSchema,
+  queryInstanceOverlapsSchema,
+  getVideoChunksSchema,
+  downloadVideoChunkSchema,
+  querySequenceSchema
+};
+
+export default {
   instanceOverlapsInAreaSchema,
   instancesAtTimeSchema,
   spatialObjectsTemporalSchema,

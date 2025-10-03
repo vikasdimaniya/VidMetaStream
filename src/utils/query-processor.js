@@ -1,11 +1,18 @@
 // src/utils/query-processor
-const queryService = require('../services/query-processor.js');
-const timeWindowsUtils = require('../utils/time-windows.js');
-const gridFSStorage = require('../services/chunk-storage.js');
-const fs = require('fs');
-const db = require('../db');
-const core = require('../../core.js');
-const path = require('path');
+import queryService from '../services/query-processor.js';
+import timeWindowsUtils from './time-windows.js';
+import gridFSStorage from '../services/chunk-storage.js';
+import { convertTimeToSeconds, interpretRelativeArea, isPositionInArea as isPositionInAreaUtil, secondsToTime, incrementTimestamp } from './spatial-utils.js';
+import { SpatialIndex } from './spatial-index.js';
+import fs from 'fs';
+import db from '../db.js';
+import core from '../../core.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 const logFilePath = path.join(__dirname, 'timestamp_analysis.log');
 // Utility to log to a file
 const logToFile = (message) => {
@@ -15,33 +22,10 @@ const logToFile = (message) => {
 // Import getInstanceData directly from queryService
 const getInstanceData = queryService.getInstanceData;
 
-/**
- * Increment a timestamp by a small amount
- * @param {number} currentTimestamp - The current timestamp in seconds
- * @returns {number} - The incremented timestamp
- */
-const incrementTimestamp = (currentTimestamp) => {
-    // Extract the whole part and the fractional part
-    const wholePart = Math.floor(currentTimestamp);
-    let milliseconds = Math.round((currentTimestamp - wholePart) * 1000);
-    
-    // Add a small increment (33ms, approximately 1/30th of a second)
-    // This is a common frame rate in videos
-    const increment = 33;
-    
-    // Calculate the new milliseconds
-    milliseconds += increment;
-    
-    // Handle overflow if milliseconds reach or exceed 1000
-    if (milliseconds >= 1000) {
-        milliseconds -= 1000;
-        return wholePart + 1 + (milliseconds / 1000);
-    }
-    
-    // Return the new timestamp
-    return wholePart + (milliseconds / 1000);
-};
+// Constants
+const EPSILON = 0.001; // For floating-point comparisons (1ms tolerance)
 
+// Use incrementTimestamp from spatial-utils (already imported above)
 
 const getDocumentsByVideoId = async (video_id, object_name) => {
     const documents = await db.objects.find({
@@ -95,11 +79,15 @@ const filterOverlapsForVideo = async (video_id, object, merged_overlaps, count, 
                 }
 
                 for (const frame of frames) {
-                    const frameTimestampInSeconds = parseFloat(frame.timestamp.split(":").reduce((acc, time, idx) => {
-                        return acc + time * Math.pow(60, 2 - idx); // Convert HH:MM:SS.SSS to seconds
-                    }, 0));
+                    // Parse timestamp properly: HH:MM:SS.SSS to seconds
+                    const parts = frame.timestamp.split(":");
+                    const hours = parseFloat(parts[0]);
+                    const minutes = parseFloat(parts[1]);
+                    const seconds = parseFloat(parts[2]);
+                    const frameTimestampInSeconds = hours * 3600 + minutes * 60 + seconds;
 
-                    if (frameTimestampInSeconds === currentTimestamp) {
+                    // Use epsilon comparison for floating-point timestamps
+                    if (Math.abs(frameTimestampInSeconds - currentTimestamp) < EPSILON) {
                         const positionMatches = isPositionInArea(frame.relative_position, area);
                         if (positionMatches) {
                             matchCount++;
@@ -148,23 +136,9 @@ const filterOverlapsForVideo = async (video_id, object, merged_overlaps, count, 
     return successIntervals; // Return the successful intervals
 };
 
-/**
- * Checks if a relative position satisfies the area requirement.
- * @param {Array} relativePosition - The [x, y] coordinates of the relative position.
- * @param {Array} area - The area bounds as [x1, y1, x2, y2].
- * @returns {boolean} - Returns true if the relative position satisfies the area, otherwise false.
- */
-const isPositionInArea = (relativePosition, area) => {
-    if (!relativePosition || relativePosition.length !== 2 || !area || area.length !== 4) {
-        throw new Error('Invalid relative position or area');
-    }
-
-    const [x, y] = relativePosition;
-    const [x1, y1, x2, y2] = area;
-
-    // Check if the position is within the bounds of the area
-    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
-};
+// Use isPositionInArea from spatial-utils (imported as isPositionInAreaUtil)
+// Keeping local reference for backward compatibility
+const isPositionInArea = isPositionInAreaUtil;
 
 /**
  * Find overlaps between instances of the same object
@@ -278,6 +252,11 @@ const mergeOverlappingIntervals = (overlapData) => {
     overlapData.forEach(videoOverlap => {
         const { video_id, overlaps } = videoOverlap;
 
+        // Handle empty overlaps array
+        if (!overlaps || overlaps.length === 0) {
+            return;
+        }
+
         // Sort overlaps by start time
         overlaps.sort((a, b) => a.start_time - b.start_time);
 
@@ -344,9 +323,20 @@ const getInstancesByObjectAndTime = async (object_name, time) => {
     documents.forEach((doc) => {
         const { video_id, start_time, end_time, _id: instance_id } = doc;
 
-        // Normalize start_time and end_time
-        const normalizedStartTime = parseFloat(start_time.$numberDecimal || start_time);
-        const normalizedEndTime = parseFloat(end_time.$numberDecimal || end_time);
+        // Safely normalize start_time and end_time handling Decimal128, null, and undefined
+        const normalizedStartTime = start_time?.$numberDecimal 
+            ? parseFloat(start_time.$numberDecimal) 
+            : (parseFloat(start_time) || 0);
+        
+        const normalizedEndTime = end_time?.$numberDecimal 
+            ? parseFloat(end_time.$numberDecimal) 
+            : (parseFloat(end_time) || 0);
+
+        // Skip if we got invalid values
+        if (isNaN(normalizedStartTime) || isNaN(normalizedEndTime)) {
+            console.log(`Skipping document with invalid timestamps: start=${start_time}, end=${end_time}`);
+            return;
+        }
 
         // Check if the time falls within the object's time range
         if (time >= normalizedStartTime && time <= normalizedEndTime) {
@@ -412,14 +402,10 @@ const countSpatialObjects = async ({ objects, area }) => {
     // Create query for MongoDB
     const query = {
         object_name: { $in: objects },
-        'frames.relative_position': {
+        'frames': {
             $elemMatch: {
-                $and: [
-                    { $gte: area[0] }, // x >= x1
-                    { $lte: area[2] }, // x <= x2
-                    { $gte: area[1] }, // y >= y1
-                    { $lte: area[3] }  // y <= y2
-                ]
+                'relative_position.0': { $gte: area[0], $lte: area[2] }, // x coordinate
+                'relative_position.1': { $gte: area[1], $lte: area[3] }  // y coordinate
             }
         }
     };
@@ -453,9 +439,8 @@ const querySpatialObjectsWithPagination = async ({ objects, area }, skip, limit)
         }
     }
     
-    // Use the spatial index if available
-    const spatialIndex = require('./spatial-index').SpatialIndex;
-    const index = new spatialIndex();
+    // Use the spatial index (imported at top of file)
+    const index = new SpatialIndex();
     
     // Get all objects for the specified object types
     const allObjects = await db.objects.find({
@@ -582,31 +567,162 @@ const intersectWindows = (windowsList) => {
     return intersection;
 };
 
-// helper function for combinations of distinct instance types
-const getCombinations = (array, size) => {
-    if (size > array.length) return [];
-    const results = [];
-    const combination = (start, depth, prefix) => {
-        if (depth === 0) {
-            results.push(prefix);
-            return;
+// getCombinations removed - was unused
+// isWithinRegion removed - use isPositionInArea instead
+
+/**
+ * Query for videos where objects appear together within a time window
+ * @param {Array} objects - Array of object names to search for
+ * @param {number} windowSize - Optional maximum time window size in seconds
+ * @returns {Promise<Array>} - Array of video sections where objects appear together
+ */
+const queryObjects = async (objects, windowSize) => {
+    try {
+        // Get all data for the requested objects
+        const objectData = await queryService.getObjectData(objects);
+        
+        if (!objectData || objectData.length === 0) {
+            return [];
         }
-        for (let i = start; i <= array.length - depth; i++) {
-            combination(i + 1, depth - 1, [...prefix, array[i]]);
+        
+        // Group by video_id
+        const videoGroups = {};
+        for (const obj of objectData) {
+            const { video_id, object_name, start_time, end_time } = obj;
+            
+            if (!videoGroups[video_id]) {
+                videoGroups[video_id] = {};
+            }
+            
+            if (!videoGroups[video_id][object_name]) {
+                videoGroups[video_id][object_name] = [];
+            }
+            
+            videoGroups[video_id][object_name].push({
+                start_time,
+                end_time
+            });
         }
-    };
-    combination(0, size, []);
-    return results;
-    
-}
-// Helper function to check if a point is within a defined region
-const isWithinRegion = (point, region) => {
-    const [x1, y1, x2, y2] = region;
-    const [x, y] = point;
-    return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+        
+        const results = [];
+        
+        // For each video, find time windows where all objects appear
+        for (const [video_id, videoObjects] of Object.entries(videoGroups)) {
+            // Check if all requested objects exist in this video
+            const objectNames = Object.keys(videoObjects);
+            if (!objects.every(obj => objectNames.includes(obj))) {
+                continue; // Skip this video if not all objects are present
+            }
+            
+            // Find overlapping time windows for all objects
+            const windows = findOverlappingWindows(videoObjects, objects, windowSize);
+            
+            if (windows.length > 0) {
+                results.push({
+                    video_id,
+                    windows
+                });
+            }
+        }
+        
+        return results;
+    } catch (error) {
+        console.error('Error in queryObjects:', error);
+        throw error;
+    }
 };
 
-module.exports = {
+/**
+ * Helper function to find overlapping time windows for multiple objects
+ * @param {Object} videoObjects - Object containing arrays of time ranges for each object
+ * @param {Array} objects - Array of object names
+ * @param {number} windowSize - Optional maximum window size
+ * @returns {Array} - Array of overlapping windows
+ */
+const findOverlappingWindows = (videoObjects, objects, windowSize) => {
+    // Get all time ranges for the first object
+    const firstObject = objects[0];
+    const firstRanges = videoObjects[firstObject];
+    
+    const overlaps = [];
+    
+    // For each time range of the first object
+    for (const firstRange of firstRanges) {
+        let overlapStart = firstRange.start_time;
+        let overlapEnd = firstRange.end_time;
+        let validOverlap = true;
+        
+        // Check overlap with all other objects
+        for (let i = 1; i < objects.length; i++) {
+            const currentObject = objects[i];
+            const currentRanges = videoObjects[currentObject];
+            
+            // Find any overlapping range
+            let hasOverlap = false;
+            for (const currentRange of currentRanges) {
+                // Check if ranges overlap
+                if (currentRange.start_time < overlapEnd && currentRange.end_time > overlapStart) {
+                    // Update overlap window to intersection
+                    overlapStart = Math.max(overlapStart, currentRange.start_time);
+                    overlapEnd = Math.min(overlapEnd, currentRange.end_time);
+                    hasOverlap = true;
+                    break;
+                }
+            }
+            
+            if (!hasOverlap) {
+                validOverlap = false;
+                break;
+            }
+        }
+        
+        // Check if overlap is valid and within window size
+        if (validOverlap && overlapStart < overlapEnd) {
+            const duration = overlapEnd - overlapStart;
+            if (!windowSize || duration <= windowSize) {
+                overlaps.push({
+                    start_time: overlapStart,
+                    end_time: overlapEnd
+                });
+            }
+        }
+    }
+    
+    // Merge overlapping windows
+    return mergeNumericWindows(overlaps);
+};
+
+/**
+ * Merge overlapping or contiguous numeric time windows
+ * @param {Array} windows - Array of {start_time, end_time} objects
+ * @returns {Array} - Merged windows
+ */
+const mergeNumericWindows = (windows) => {
+    if (windows.length === 0) return [];
+    
+    // Sort by start_time
+    windows.sort((a, b) => a.start_time - b.start_time);
+    
+    const merged = [windows[0]];
+    
+    for (let i = 1; i < windows.length; i++) {
+        const current = windows[i];
+        const last = merged[merged.length - 1];
+        
+        if (current.start_time <= last.end_time) {
+            // Merge overlapping windows
+            last.end_time = Math.max(last.end_time, current.end_time);
+        } else {
+            // Add non-overlapping window
+            merged.push(current);
+        }
+    }
+    
+    return merged;
+};
+
+// Export all functions
+export {
     getDocumentsByVideoId,
     filterOverlapsForVideo,
     isPositionInArea,
@@ -617,11 +733,28 @@ module.exports = {
     filterByTimeWindow,
     mergeWindows,
     intersectWindows,
-    getCombinations,
-    isWithinRegion,
     countSpatialObjects,
     querySpatialObjectsWithPagination,
     getQueryCursor,
+    queryObjects
+};
+
+// Create default export object
+const queryProcessorUtils = {
+    getDocumentsByVideoId,
+    filterOverlapsForVideo,
+    isPositionInArea,
+    findInstanceOverlaps,
+    mergeOverlappingIntervals,
+    queryInstanceOverlaps,
+    getInstancesByObjectAndTime,
+    filterByTimeWindow,
+    mergeWindows,
+    intersectWindows,
+    countSpatialObjects,
+    querySpatialObjectsWithPagination,
+    getQueryCursor,
+    queryObjects,  // Query for videos where objects appear together
     //gets distinct instance object data from service
     getInstanceData: queryService.getInstanceData,
     getVideoChunk: async (videoId, windows) => {
@@ -644,7 +777,7 @@ module.exports = {
             for (const frame of frames) {
                 const [x, y] = frame.relative_position;
     
-                if (isWithinRegion([x, y], area)) {
+                if (isPositionInArea([x, y], area)) {
                     if (currentWindowStart === null) {
                         currentWindowStart = frame.timestamp;
                     }
@@ -692,111 +825,74 @@ module.exports = {
     },    
     
     // Query objects by area inclusive logical AND, obj x AND obj y in area
-    //CHECK IF WORKING FOR MULTIPLE VIDEOS
+    // Fixed to properly handle multiple videos
     querySpatialObjectsAnd: async ({ objects, area }) => {
         // Step 1: Use the existing querySpatialObjects function to get all valid windows
         const allObjectsWindows = await module.exports.querySpatialObjects({ objects, area });
     
-        // Step 2: Transform the results to a map for easier processing
-        const windowsByObject = {};
+        // Step 2: Group by video_id first
+        const windowsByVideo = {};
         for (const entry of allObjectsWindows) {
-            windowsByObject[entry.object_name] = entry.windows;
+            const { video_id, object_name, windows } = entry;
+            
+            if (!windowsByVideo[video_id]) {
+                windowsByVideo[video_id] = {};
+            }
+            
+            // For each object in each video, merge windows if already exists
+            if (!windowsByVideo[video_id][object_name]) {
+                windowsByVideo[video_id][object_name] = windows;
+            } else {
+                // Merge windows for the same object in the same video
+                windowsByVideo[video_id][object_name] = mergeWindows([
+                    ...windowsByVideo[video_id][object_name],
+                    ...windows
+                ]);
+            }
         }
     
-        // Step 3: Ensure all requested objects have data
-        const objectsWithWindows = Object.keys(windowsByObject);
-        if (!objects.every((obj) => objectsWithWindows.includes(obj))) {
-            return []; // No overlap possible if any object is missing
-        }
-    
-        // Step 4: Compute the intersection of windows across all objects
-        const intersectedWindows = intersectWindows(objects.map((obj) => windowsByObject[obj]));
-    
-        // Step 5: Format the results with combined object names
-        const result = {
-            video_id: allObjectsWindows[0]?.video_id, // Assuming all entries share the same video_id
-            objects: [
-                {
-                    object_names: objects, // Keep the objects as an array
-                    windows: intersectedWindows,
-                },
-            ],
-        };
-        return [result];
-    },      
-
-    getFramesByTimeAndArea: (video_id, object_name, start_time, end_time, area) => {
-        const [x1, y1, x2, y2] = area;
-    
-        // Query the database for frames within the specified time range and area
-        return db.frames.find({
-            video_id,
-            object_name,
-            timestamp: { $gte: start_time, $lte: end_time },
-            "relative_position.0": { $gte: x1, $lte: x2 }, // x-coordinate
-            "relative_position.1": { $gte: y1, $lte: y2 }  // y-coordinate
-        });
-    },
-    // query spatial objects async func handler
-    // - logic to find objects at specified locations
-    // Logic to find objects at specified locations
-    querySpatialObjects: async ({ objects, area }) => {
+        // Step 3: Process each video separately
         const results = [];
-
-        // Fetch objects from the service
-        const objectData = await queryService.getObjectData(objects);
-
-        for (const obj of objectData) {
-            const { video_id, object_name, frames } = obj;
-
-            const validWindows = [];
-            let currentWindowStart = null;
-
-            for (const frame of frames) {
-                const [x, y] = frame.relative_position;
-
-                // Check if the relative position is within the specified area
-                if (isWithinRegion([x, y], area)) {
-                    if (currentWindowStart === null) {
-                        currentWindowStart = frame.timestamp; // Start a new window
-                    }
-                } else {
-                    // Close the current window if it exists
-                    if (currentWindowStart !== null) {
-                        validWindows.push({
-                            start_time: currentWindowStart,
-                            end_time: frame.timestamp,
-                        });
-                        currentWindowStart = null; // Reset the window
-                    }
-                }
+        
+        for (const [video_id, videoObjects] of Object.entries(windowsByVideo)) {
+            // Check if all requested objects exist in this video
+            const objectsInVideo = Object.keys(videoObjects);
+            if (!objects.every((obj) => objectsInVideo.includes(obj))) {
+                continue; // Skip this video if not all objects are present
             }
-
-            // Add the last window if it was still open
-            if (currentWindowStart !== null) {
-                validWindows.push({
-                    start_time: currentWindowStart,
-                    end_time: frames[frames.length - 1].timestamp,
-                });
-            }
-
-            // Merge or refine windows if necessary
-            const mergedWindows = timeWindowsUtils.mergeWindows
-                ? timeWindowsUtils.mergeWindows(validWindows)
-                : validWindows;
-
-            // Only include results with valid windows
-            if (mergedWindows.length > 0) {
+            
+            // Compute intersection of windows for all objects in this video
+            const intersectedWindows = intersectWindows(objects.map((obj) => videoObjects[obj]));
+            
+            // Only add result if there are valid intersecting windows
+            if (intersectedWindows.length > 0) {
                 results.push({
                     video_id,
-                    object_name,
-                    windows: mergedWindows,
+                    objects: [
+                        {
+                            object_names: objects,
+                            windows: intersectedWindows,
+                        },
+                    ],
                 });
             }
         }
-
+        
         return results;
     },
+    
+    // getFramesByTimeAndArea removed - legacy code, uses db.frames collection that may not exist
+    // Kept commented for reference:
+    // getFramesByTimeAndArea: (video_id, object_name, start_time, end_time, area) => {
+    //     const [x1, y1, x2, y2] = area;
+    //     return db.frames.find({
+    //         video_id,
+    //         object_name,
+    //         timestamp: { $gte: start_time, $lte: end_time },
+    //         "relative_position.0": { $gte: x1, $lte: x2 },
+    //         "relative_position.1": { $gte: y1, $lte: y2 }
+    //     });
+    // },
     /**
       * Fetch the file metadata by chunk ID.
       * @param {string} chunkId - The chunk's GridFS ID.
@@ -846,66 +942,17 @@ module.exports = {
                 });
             }
             
+            // Sort instances by start_time for efficient sequence detection
+            for (const videoId in videoObjects) {
+                for (const objectName in videoObjects[videoId]) {
+                    videoObjects[videoId][objectName].sort((a, b) => a.start_time - b.start_time);
+                }
+            }
+            
             // Find sequences in each video
             const results = [];
             
-            // Helper function to find sequential appearances
-            const findSequentialAppearances = (videoData, sequence, maxWindowSize) => {
-                const windows = [];
-                
-                // Get all instances of the first object
-                const firstObjectInstances = videoData[sequence[0]];
-                
-                for (const firstInstance of firstObjectInstances) {
-                    const startTime = firstInstance.start_time;
-                    let endTime = firstInstance.end_time;
-                    let validSequence = true;
-                    
-                    // For each subsequent object in the sequence
-                    for (let i = 1; i < sequence.length; i++) {
-                        const currentObject = sequence[i];
-                        const currentInstances = videoData[currentObject];
-                        
-                        // Find an instance that starts after the previous object ends
-                        const nextInstance = currentInstances.find(instance => 
-                            instance.start_time >= endTime
-                        );
-                        
-                        if (!nextInstance) {
-                            validSequence = false;
-                            break;
-                        }
-                        
-                        // Update the end time
-                        endTime = nextInstance.end_time;
-                        
-                        // Check if the window size exceeds the maximum
-                        if (maxWindowSize > 0 && (endTime - startTime) > maxWindowSize) {
-                            validSequence = false;
-                            break;
-                        }
-                    }
-                    
-                    if (validSequence) {
-                        windows.push({
-                            start_time: startTime,
-                            end_time: endTime
-                        });
-                    }
-                }
-                
-                return windows;
-            };
-            
-            // Helper function to format timestamps
-            const formatTimestamp = (timestamp) => {
-                const hours = Math.floor(timestamp / 3600);
-                const minutes = Math.floor((timestamp % 3600) / 60);
-                const seconds = Math.floor(timestamp % 60);
-                const milliseconds = Math.round((timestamp % 1) * 1000);
-                
-                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
-            };
+            // Use the exported findSequentialAppearances function defined below
             
             for (const videoId in videoObjects) {
                 const videoData = videoObjects[videoId];
@@ -913,14 +960,14 @@ module.exports = {
                 // Check if all objects in the sequence are present in this video
                 if (sequence.every(obj => videoData[obj] && videoData[obj].length > 0)) {
                     // Find sequences where objects appear in order
-                    const sequenceWindows = findSequentialAppearances(videoData, sequence, windowSize);
+                    const sequenceWindows = module.exports.findSequentialAppearances(videoData, sequence, windowSize);
                     
                     if (sequenceWindows.length > 0) {
                         results.push({
                             video_id: videoId,
                             windows: sequenceWindows.map(window => ({
-                                start_time: formatTimestamp(window.start_time),
-                                end_time: formatTimestamp(window.end_time)
+                                start_time: module.exports.formatTimestamp(window.start_time),
+                                end_time: module.exports.formatTimestamp(window.end_time)
                             }))
                         });
                     }
@@ -946,20 +993,41 @@ module.exports = {
         // Get all instances of the first object
         const firstObjectInstances = videoData[sequence[0]];
         
+        if (!firstObjectInstances || firstObjectInstances.length === 0) {
+            return windows;
+        }
+        
         for (const firstInstance of firstObjectInstances) {
             const startTime = firstInstance.start_time;
             let endTime = firstInstance.end_time;
             let validSequence = true;
+            let previousEndTime = endTime;
             
             // For each subsequent object in the sequence
             for (let i = 1; i < sequence.length; i++) {
                 const currentObject = sequence[i];
                 const currentInstances = videoData[currentObject];
                 
-                // Find an instance that starts after the previous object ends
-                const nextInstance = currentInstances.find(instance => 
-                    instance.start_time >= endTime
-                );
+                if (!currentInstances || currentInstances.length === 0) {
+                    validSequence = false;
+                    break;
+                }
+                
+                // Find the CLOSEST instance that starts at or after the previous object ends
+                // This improves accuracy over just finding the first match
+                let nextInstance = null;
+                let minGap = Infinity;
+                
+                for (const instance of currentInstances) {
+                    // Instance must start at or after previous ends
+                    if (instance.start_time >= previousEndTime) {
+                        const gap = instance.start_time - previousEndTime;
+                        if (gap < minGap) {
+                            minGap = gap;
+                            nextInstance = instance;
+                        }
+                    }
+                }
                 
                 if (!nextInstance) {
                     validSequence = false;
@@ -968,6 +1036,7 @@ module.exports = {
                 
                 // Update the end time
                 endTime = nextInstance.end_time;
+                previousEndTime = nextInstance.end_time;
                 
                 // Check if the window size exceeds the maximum
                 if (maxWindowSize > 0 && (endTime - startTime) > maxWindowSize) {
@@ -1000,3 +1069,6 @@ module.exports = {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
     },
 };
+
+// Default export
+export default queryProcessorUtils;
