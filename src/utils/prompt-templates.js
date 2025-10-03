@@ -58,7 +58,7 @@ Here are the available query types and their corresponding API endpoints:
    - Parameters: objects (array), area (string or array), start_time (number), end_time (number)
 
 5. SEQUENCE_QUERY: Find sequences of objects appearing in order
-   - Endpoint: /query/tempral/objects
+   - Endpoint: /query/temporal/objects
    - Parameters: sequence (array), window_size (number, optional)
 
 6. INSTANCE_QUERY: Find overlapping instances of the same object

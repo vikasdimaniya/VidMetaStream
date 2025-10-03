@@ -535,7 +535,7 @@ const getInstancesByObjectAndTime = async (object_name, time) => {
         if (instances.length >= INTERVAL_TREE_THRESHOLD) {
             // Use Interval Tree for large instance sets: O(log I + k) query time
             const tree = intervalTreeCache.getOrBuild(video_id, instances);
-            const matchingIntervals = tree.query(time);
+            const matchingIntervals = tree.queryPoint(time);
             
             // Process matching instances
             for (const interval of matchingIntervals) {

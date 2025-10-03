@@ -171,7 +171,7 @@ async function routes(fastify, options) {
       '/query/objects': queryProcessor.queryVideos,
       '/query/spatialObjects': queryProcessor.querySpatialObjects,
       '/query/spatialObjectsAnd': queryProcessor.querySpatialObjectsAnd,
-      '/query/tempral/objects': queryProcessor.querySequence,
+      '/query/temporal/objects': queryProcessor.querySequence,
       '/query/queryInstanceOverlaps': queryProcessor.queryInstanceOverlaps,
       '/query/spatialObjectsTemporal': queryProcessor.querySpatialObjectsTemporal,
       '/query/queryInstancesAtTime': queryProcessor.queryInstancesAtTime,

@@ -274,7 +274,7 @@ class LLMService extends Server {
           };
           break;
         case 'SEQUENCE_QUERY':
-          apiEndpoint = '/query/tempral/objects';
+          apiEndpoint = '/query/temporal/objects';
           apiParams = {
             sequence: JSON.stringify(sequence || objects),
             window_size: windowSize || 10

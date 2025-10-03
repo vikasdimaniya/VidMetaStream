@@ -14,7 +14,7 @@ export class VidMetaStreamClient {
     }
 
     async querySequences(params: any) {
-        const response = await axios.get(`${this.baseUrl}/query/tempral/objects`, { params });
+        const response = await axios.get(`${this.baseUrl}/query/temporal/objects`, { params });
         return response.data;
     }
 
