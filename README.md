@@ -241,3 +241,9 @@ The second approach is preferable for large files as it:
 ---
 
 Enjoy exploring your video datasets!
+
+## short cuts commands:
+minio server --console-address ":9001" ~/minio-data  
+npm start  
+python -m ML.main  
+npm run start-fragmenter  
