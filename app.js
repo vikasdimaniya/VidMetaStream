@@ -4,6 +4,7 @@ import fastifyCors from '@fastify/cors';
 import videoRoutes from './src/routes/video.js';
 import queryRoutes from './src/routes/query-processor.js';
 import db from './src/db.js';
+import core from './core.js';
 import dotenv from 'dotenv';
 import { mcpServer } from './src/mcp-server.js';
 
@@ -19,8 +20,9 @@ fastify.register(fastifyCors, {
     origin: true
 });
 
-// Connect to MongoDB
+// Connect to MongoDB and initialize GridFS
 await db.connectDB();
+await core.initMongo();
 
 // Register routes
 await videoRoutes(fastify);

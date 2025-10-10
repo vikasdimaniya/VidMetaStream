@@ -4,6 +4,10 @@ import { ObjectId } from 'mongodb';
 
 // Upload function with metadata storage
 export const uploadFile = function (gridFSBucket, filePath, metadata) {
+    if (!gridFSBucket) {
+        return Promise.reject(new Error('GridFSBucket is not initialized. Ensure core.initMongo() is called before using GridFS operations.'));
+    }
+    
     return new Promise((resolve, reject) => {
         fs.createReadStream(filePath)
             .pipe(gridFSBucket.openUploadStream(filePath, { metadata }))
@@ -18,6 +22,10 @@ export const uploadFile = function (gridFSBucket, filePath, metadata) {
 };
 
 export const uploadAllFilesToGridfs = async function (gridFSBucket, videoID, dir, timestamps) {
+    if (!gridFSBucket) {
+        throw new Error('GridFSBucket is not initialized. Ensure core.initMongo() is called before using GridFS operations.');
+    }
+    
     let promiseList = [];
     const files = fs.readdirSync(dir);
 
@@ -53,26 +61,89 @@ export const uploadAllFilesToGridfs = async function (gridFSBucket, videoID, dir
     return results;
 };
 
+// Helper function to convert timestamp to seconds
+const convertToSeconds = (timestamp) => {
+    if (typeof timestamp === 'number') {
+        return timestamp;
+    }
+    if (typeof timestamp === 'string') {
+        // Handle "HH:MM:SS.mmm" format
+        const parts = timestamp.split(':');
+        if (parts.length === 3) {
+            const hours = parseFloat(parts[0]);
+            const minutes = parseFloat(parts[1]);
+            const seconds = parseFloat(parts[2]);
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+        // Handle plain number string
+        return parseFloat(timestamp);
+    }
+    return timestamp;
+};
+
 export const getVideoFilesForTimeWindows = async (gridFSBucket, video_id, windows) => {
+    if (!gridFSBucket) {
+        throw new Error('GridFSBucket is not initialized. Ensure core.initMongo() is called before using GridFS operations.');
+    }
+    
     const results = [];
 
     for (const window of windows) {
-        const { startTime, endTime } = window;
+        let { startTime, endTime } = window;
+        
+        // Convert timestamps to seconds if they're in string format
+        startTime = convertToSeconds(startTime);
+        endTime = convertToSeconds(endTime);
 
-        // MongoDB query to find overlapping files
-        const matchingFiles = await gridFSBucket.find({
+        console.log(`[GridFS Query] Searching for video_id: ${video_id}, window: ${startTime}-${endTime}s (converted to numbers)`);
+
+        // MongoDB query to find overlapping chunks
+        // Overlap occurs when: chunk.startTime < query.endTime AND chunk.endTime > query.startTime
+        // This handles all overlap cases including:
+        // - Chunk fully contains query window
+        // - Query fully contains chunk
+        // - Partial overlap (left or right)
+        const query = {
             'metadata.videoID': new ObjectId(video_id),
-            $and: [
-                { 'metadata.startTime': { $lt: endTime } }, // File starts before query ends
-                { 'metadata.endTime': { $gt: startTime } }  // File ends after query starts
+            $or: [
+                // Case 1: Chunk overlaps with query window
+                {
+                    $and: [
+                        { 'metadata.startTime': { $lt: endTime } },   // Chunk starts before query ends
+                        { 'metadata.endTime': { $gt: startTime } }    // Chunk ends after query starts
+                    ]
+                },
+                // Case 2: Also check if boundaries match exactly (edge case for 5-10 matching at 5)
+                {
+                    $and: [
+                        { 'metadata.startTime': { $lte: endTime } },   // <= for inclusive boundaries
+                        { 'metadata.endTime': { $gte: startTime } }    // >= for inclusive boundaries
+                    ]
+                }
             ]
-        }).toArray();
+        };
 
+        const matchingFiles = await gridFSBucket.find(query).toArray();
+        
+        console.log(`[GridFS Query] Found ${matchingFiles.length} matching chunks`);
+        if (matchingFiles.length > 0) {
+            console.log('[GridFS Query] Matching chunks:', matchingFiles.map(f => ({
+                filename: f.filename,
+                startTime: f.metadata?.startTime,
+                endTime: f.metadata?.endTime,
+                duration: f.metadata?.duration
+            })));
+        }
+        
         // Append matching files to results
         results.push(...matchingFiles);
     }
 
-    return results; // Return all matching files
+    // Remove duplicates (same file might match multiple windows)
+    const uniqueResults = Array.from(new Map(results.map(item => [item._id.toString(), item])).values());
+    
+    console.log(`[GridFS Query] Total unique chunks returned: ${uniqueResults.length}`);
+    return uniqueResults;
 };
 
 /**
@@ -81,6 +152,10 @@ export const getVideoFilesForTimeWindows = async (gridFSBucket, video_id, window
  * @returns {ReadableStream} - File stream from GridFS.
  */
 export const downloadFileAsStream = (gridFSBucket, fileId) => {
+    if (!gridFSBucket) {
+        throw new Error('GridFSBucket is not initialized. Ensure core.initMongo() is called before using GridFS operations.');
+    }
+    
     return gridFSBucket.openDownloadStream(fileId);
 };
 
@@ -89,12 +164,20 @@ export const downloadFileAsStream = (gridFSBucket, fileId) => {
  * @param {Object} query - The MongoDB query to filter files.
  * @returns {Promise<Array>} - Array of matching file documents.
  */
-export const getFilesMetadata = async (query) => {
+export const getFilesMetadata = async (gridFSBucket, query) => {
+    if (!gridFSBucket) {
+        throw new Error('GridFSBucket is not initialized. Ensure core.initMongo() is called before using GridFS operations.');
+    }
+    
     const files = await gridFSBucket.find(query).toArray();
     return files;
 };
 
 export const getChunk = async (gridFSBucket, chunkId) => {
+    if (!gridFSBucket) {
+        throw new Error('GridFSBucket is not initialized. Ensure core.initMongo() is called before using GridFS operations.');
+    }
+    
     const file = await gridFSBucket.find({ _id: new ObjectId(chunkId) }).toArray();
     return file[0];
 };
